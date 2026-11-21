@@ -72,7 +72,7 @@ function flatProps(it) {
 }
 
 // DXF R12 (mở được bằng AutoCAD, Civil 3D, QGIS…), trục Y hướng Bắc
-const DXF_LAYERS = { cad: 'QP_0_NEN', water: 'QP_1_SONG_HO', road: 'QP_2_GIAO_THONG', zone: 'QP_3_SDD', park: 'QP_7_CANH_QUAN', land: 'QP_7_CANH_QUAN', building: 'QP_6_CONG_TRINH', arrow: 'QP_4_SO_DO', flow: 'QP_4_SO_DO', circle: 'QP_4_SO_DO', cloud: 'QP_4_SO_DO', icon: 'QP_4_BIEU_TUONG', sketch: 'QP_0_NET_VE' };
+const DXF_LAYERS = { cad: 'QP_0_NEN', water: 'QP_1_SONG_HO', road: 'QP_2_GIAO_THONG', zone: 'QP_3_SDD', park: 'QP_7_CANH_QUAN', land: 'QP_7_CANH_QUAN', building: 'QP_6_CONG_TRINH', arrow: 'QP_4_SO_DO', flow: 'QP_4_SO_DO', circle: 'QP_4_SO_DO', cloud: 'QP_4_SO_DO', icon: 'QP_4_BIEU_TUONG', sketch: 'QP_5_CO_NHAP' };
 const DXF_COLORS = { QP_0_NEN: 8, QP_1_SONG_HO: 5, QP_2_GIAO_THONG: 9, QP_3_SDD: 2, QP_7_CANH_QUAN: 3, QP_6_CONG_TRINH: 7, QP_4_SO_DO: 1, QP_4_BIEU_TUONG: 6, QP_5_NHAP: 250, QP_TIM_DUONG: 1, QP_CHU: 7 };
 export function toDXF(doc) {
   const L = [];

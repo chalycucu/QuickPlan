@@ -1,6 +1,6 @@
 // Tô ô đất: tìm vùng trống khép kín bởi đường, sông, ô đất khác và nét CAD quanh điểm chạm.
 import * as G from './geom.js';
-import { roadTotalWidth, LAND_CLOSED } from './model.js';
+import { roadTotalWidth, LAND_CLOSED, liveItems } from './model.js';
 import { View } from './render2d.js';
 
 const K = 2; // độ phân giải lưới = 1/2 điểm ảnh màn hình
@@ -14,7 +14,7 @@ const FILL_KINDS = new Set(['road', 'water', 'zone', 'cad', 'sketch', 'building'
 // khung bao từng đối tượng (nới theo nửa bề rộng đường / sông) — tính một lần mỗi lần chạm
 function itemBoxes(doc) {
   const out = [];
-  for (const it of doc.items) {
+  for (const it of liveItems(doc)) {
     if (!FILL_KINDS.has(it.kind)) continue;
     const P = it.pts; if (!P || !P.length) continue;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -76,7 +76,7 @@ function finishFill(doc, extra, opts, fine, fs) {
 export function edgeSources(doc, extra = [], near = null, opts = {}) {
   const out = [];
   const ok = (pts, pad) => { if (!near) return true; const b = G.bbox(pts); return b.x1 + pad >= near.x0 && b.x0 - pad <= near.x1 && b.y1 + pad >= near.y0 && b.y0 - pad <= near.y1; };
-  for (const it of doc.items) {
+  for (const it of liveItems(doc)) {
     if (it.kind === 'road') { const hw = roadTotalWidth(it) / 2; if (ok(it.pts, hw)) out.push({ pts: it.pts, closed: false, off: hw }); }
     else if (it.kind === 'water') {
       if (it.props.mode === 'river') { if (ok(it.pts, it.props.width / 2)) out.push({ pts: it.pts, closed: false, off: it.props.width / 2 }); }
@@ -134,7 +134,7 @@ export function fillRegion(doc, view, screenPt, extra = [], fine = false, opts =
   x.strokeStyle = x.fillStyle = '#000'; x.lineCap = 'round'; x.lineJoin = 'round';
   const S = (p) => { const s = view.toScreen(p); return [s[0] / K, s[1] / K]; };
   const path = (pts, closed) => { x.beginPath(); pts.forEach((p, i) => { const s = S(p); i ? x.lineTo(s[0], s[1]) : x.moveTo(s[0], s[1]); }); if (closed) x.closePath(); };
-  for (const it of doc.items) {
+  for (const it of liveItems(doc)) {
     if (it.kind === 'road') { path(it.pts, false); x.lineWidth = Math.max(2, (roadTotalWidth(it) * view.scale) / K); x.stroke(); }
     else if (it.kind === 'water') {
       if (it.props.mode === 'river') { path(it.pts, false); x.lineWidth = Math.max(2, (it.props.width * view.scale) / K); x.stroke(); }
@@ -309,14 +309,14 @@ function dirIndex(dx, dy) {
 // một nét / mép khác (kể cả mép đường, mép sông, chính nó) không quá `tol` mét thì thêm một đoạn nối tạm.
 let _gapC = null;
 export function gapBridges(doc, tol, opts = {}) {
-  const ck = [doc.id, doc.items.length, doc.updatedAt, tol, !!opts.land].join('|'); // nhớ đệm đến lần sửa bản vẽ sau
+  const ck = [doc.id, doc.items.length, doc.updatedAt, tol, !!opts.land, liveItems(doc).length].join('|'); // nhớ đệm đến lần sửa bản vẽ sau
   if (_gapC && _gapC.k === ck) return _gapC.v;
   const v = gapBridges0(doc, tol, opts); _gapC = { k: ck, v }; return v;
 }
 function gapBridges0(doc, tol, opts) {
   const segs = [], ends = [];
   const add = (it, P, closed, off = 0) => { const n = P.length; for (let i = 0; i < (closed ? n : n - 1); i++) segs.push({ it, i, n, a: P[i], b: P[(i + 1) % n], off }); };
-  for (const it of doc.items) {
+  for (const it of liveItems(doc)) {
     const P = it.pts; if (!P || P.length < 2) continue;
     if (it.kind === 'cad' || it.kind === 'sketch') {
       const closed = it.kind === 'cad' && !!it.closed; add(it, P, closed);

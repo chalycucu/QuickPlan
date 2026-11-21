@@ -473,13 +473,14 @@ const ICONS = { // bộ biểu tượng nét mảnh, một màu + lớp tô nh�
 // nhóm công cụ: một nút trên thanh công cụ, bấm mở hộp chọn (Phân tích) hoặc chọn kiểu ngay trong thanh tuỳ chọn (Cảnh quan)
 const TOOL_GROUPS = {
   analysis: { name: 'Phân tích', tools: [['arrow', 'Mũi tên'], ['flow', 'Nét đứt'], ['circle', 'Vòng tròn'], ['cloud', 'Vùng mây'], ['tour', 'Tour route'], ['icon', 'Biểu tượng']] },
-  editbld: { name: 'Sửa khối', tools: [['selbld', 'Chọn khối'], ['selface', 'Sửa mặt'], ['push', 'Kéo mặt'], ['face', 'Mặt trên khối']] },
+  bld: { name: 'Công trình', tools: [['building', 'Vẽ công trình'], ['selbld', 'Chọn khối'], ['selface', 'Sửa mặt'], ['push', 'Kéo mặt'], ['face', 'Mặt trên khối'], ['preset', 'Khối mẫu'], ['autolay', 'Xếp khối']] },
   land: { name: 'Cảnh quan', tools: [['land', 'Cảnh quan'], ['park', 'Cây xanh'], ['water', 'Sông hồ'], ['cover', 'Vật liệu phủ']] },
 };
-const groupOf = (t) => (t === 'push' || t === 'facet' ? 'editbld' : Object.keys(TOOL_GROUPS).find((g) => TOOL_GROUPS[g].tools.some((x) => x[0] === t)));
+ICONS.bld = ICONS.building;
+const groupOf = (t) => (t === 'push' || t === 'facet' ? 'bld' : Object.keys(TOOL_GROUPS).find((g) => TOOL_GROUPS[g].tools.some((x) => x[0] === t)));
 const TOOLS = [
   ['select', 'Chọn'], ['eraser', 'Xoá'], null,
-  ['road', 'Đường'], ['building', 'Công trình'], ['move', 'Di chuyển'], ['editbld', 'Sửa khối', 'group'], ['preset', 'Khối mẫu'], ['autolay', 'Xếp khối'], ['land', 'Cảnh quan', 'group'], ['zone', 'SDĐ'], ['check', 'Kiểm tra chỉ tiêu'], null,
+  ['road', 'Đường'], ['bld', 'Công trình', 'group'], ['move', 'Di chuyển'], ['land', 'Cảnh quan', 'group'], ['zone', 'SDĐ'], ['check', 'Kiểm tra chỉ tiêu'], null,
   ['analysis', 'Phân tích', 'group'], ['measure', 'Thước đo'], null, ['pen', 'Cọ vẽ', 'action'], ['view3d', 'Hiển thị 3D', 'action'],
 ];
 const TOOL_COLORS = { cover: '#b45309', facet: '#9333ea', land: '#4d7c0f', face: '#0f766e', road: '#59626d', footpath: '#a8864f', building: '#16325c', water: '#2b8ccf', park: '#3f8a3a', zone: '#b7791f', arrow: '#d9381e', flow: '#1f7a3a', cloud: '#c2410c' };
@@ -491,7 +492,7 @@ function buildToolbar() {
     const b = h(`<button class="tool" data-tool="${t[0]}"><span class="ti"><svg viewBox="0 0 24 24">${ICONS[t[0]]}</svg></span><span class="tl">${t[1]}</span></button>`);
     if (t[0] === 'view3d') b.onclick = () => toggle3DBar();
     else if (t[0] === 'pen') b.onclick = () => togglePenBar();
-    else if (t[0] === 'analysis' || t[0] === 'editbld') b.onclick = () => openToolGroup(b, t[0]);
+    else if (t[0] === 'analysis' || t[0] === 'bld') b.onclick = () => openToolGroup(b, t[0]);
     else if (t[0] === 'land') b.onclick = () => setTool(groupOf(S.tool) === 'land' ? S.tool : (S.opts.landTool || 'land'));
     else b.onclick = () => setTool(t[0]);
     tb.append(b);
@@ -512,7 +513,7 @@ function setTool(t) {
   const grp = groupOf(sub || t);
   if (grp === 'land') S.opts.landTool = t;
   $$('#toolbar .tool').forEach((b) => { if (b.dataset.tool === 'view3d' || b.dataset.tool === 'pen') return; b.classList.toggle('on', grp ? b.dataset.tool === grp : b.dataset.tool === t); });
-  for (const g of ['analysis', 'editbld']) { const ab = document.querySelector(`.tool[data-tool="${g}"]`); if (ab) { const k = sub || t, cur = grp === g ? k : g; ab.querySelector('svg').innerHTML = ICONS[cur]; ab.querySelector('.tl').textContent = grp === g ? TOOL_GROUPS[g].tools.find((x) => x[0] === k)[1] : TOOL_GROUPS[g].name; } }
+  for (const g of ['analysis', 'bld']) { const ab = document.querySelector(`.tool[data-tool="${g}"]`); if (ab) { const k = sub || t, cur = grp === g ? k : g; ab.querySelector('svg').innerHTML = ICONS[cur]; ab.querySelector('.tl').textContent = grp === g ? TOOL_GROUPS[g].tools.find((x) => x[0] === k)[1] : TOOL_GROUPS[g].name; } }
   if (t !== 'select' && t !== 'eraser') { S.selectedId = null; S.multi = []; renderProps(); }
   renderToolOpts(); requestRender(); syncPenBar();
   if (S.mode === '3d' && v3) draw3DOverlay(); // xoá viền mặt khối đang chọn khi đổi công cụ
@@ -548,13 +549,14 @@ function closeToolGroup() { const o = document.querySelector('.toolgrp'); if (o)
 function openToolGroup(btn, g) {
   const old = closeToolGroup(); if (old && old.dataset.g === g) return;
   const r = btn.getBoundingClientRect();
-  const box = h(`<div class="toolgrp" data-g="${g}" style="left:${r.right + 8}px;top:${Math.max(8, Math.min(r.top - 8, innerHeight - (g === 'editbld' ? 470 : 330)))}px"><div class="tg-h">${TOOL_GROUPS[g].name}</div></div>`);
+  const box = h(`<div class="toolgrp" data-g="${g}" style="left:${r.right + 8}px;top:${Math.max(8, Math.min(r.top - 8, innerHeight - (g === 'bld' ? 640 : 330)))}px"><div class="tg-h">${TOOL_GROUPS[g].name}</div></div>`);
   for (const [k, n] of TOOL_GROUPS[g].tools) {
     const b = h(`<button class="tool ${(S.subTool || S.tool) === k ? 'on' : ''}" data-pick="${k}"><span class="ti"><svg viewBox="0 0 24 24">${ICONS[k]}</svg></span><span class="tl">${n}</span></button>`);
     b.onclick = () => { closeToolGroup(); setTool(k); };
+    if (g === 'bld' && k === 'selbld') box.append(h('<div class="tg-h tg-sub">Sửa khối</div>'));
+    if (g === 'bld' && k === 'preset') { box.append(lockRows(() => { closeToolGroup(); })); box.append(h('<div class="tg-h tg-sub">Khối</div>')); }
     box.append(b);
   }
-  if (g === 'editbld') box.append(lockRows(() => { closeToolGroup(); }));
   document.body.append(box);
   const off = (e) => { if (!document.body.contains(box)) { document.removeEventListener('pointerdown', off, true); return; } if (!box.contains(e.target) && e.target.closest('.tool') !== btn) { closeToolGroup(); document.removeEventListener('pointerdown', off, true); } };
   setTimeout(() => document.addEventListener('pointerdown', off, true), 0);
@@ -732,6 +734,19 @@ function shapeByAxis(it, sc, tool = S.tool, opts = {}) {
 // công cụ vẽ theo lớp: nét / hình vẽ bằng Cọ vẽ thành đối tượng của lớp đó (đường, công trình, ô đất…)
 const DRAW_TOOLS = new Set(['road', 'footpath', 'building', 'zone', 'park', 'water', 'land', 'cover', 'cloud', 'arrow', 'flow', 'tour', 'face']);
 const penOn = () => !!(S.opts.pen && S.opts.pen.on);
+// nhóm «Chỉnh sửa» theo công cụ / loại đối tượng
+const EDIT_TOOL = { road: 'road', building: 'building', preset: 'building', autolay: 'building', face: 'building', zone: 'zone', land: 'land', park: 'land', water: 'land', cover: 'land' };
+const EDIT_KIND = { road: 'road', junction: 'road', building: 'building', facet: 'building', zone: 'zone', land: 'land', park: 'land', water: 'land', cover: 'land' };
+const EDIT_NAME = { road: 'Đường', building: 'Công trình', zone: 'SDĐ', land: 'Cảnh quan' };
+const editOn = (k) => !k || !!(S.opts.edit && S.opts.edit[k]);
+const canEdit = (it) => editOn(EDIT_KIND[it.kind]);
+const penLayerTool = () => DRAW_TOOLS.has(S.tool) && editOn(EDIT_TOOL[S.tool]); // nét Cọ vẽ thành đối tượng của lớp công cụ
+function noEditToast(it) { const k = EDIT_KIND[it.kind]; toast(`Lớp ${EDIT_NAME[k]} chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp ${EDIT_NAME[k]} để Cọ vẽ sửa đối tượng này`); }
+function editChk(key) {
+  const on = editOn(key), c = h(`<label class="chk editchk ${on ? 'on' : ''}"><input type="checkbox" ${on ? 'checked' : ''}> ✏ Chỉnh sửa</label>`);
+  c.querySelector('input').onchange = (e) => { S.opts.edit = { ...(S.opts.edit || {}), [key]: e.target.checked }; saveOpts(); syncPenBar(); renderToolOpts(); toast(e.target.checked ? `Cọ vẽ: thêm, sửa đối tượng lớp ${EDIT_NAME[key]}` : 'Cọ vẽ: nét mới vào lớp Cọ nháp'); };
+  return c;
+}
 // Sửa mặt (3D): kiểu vẽ trên mặt theo thanh Cọ vẽ; tắt Cọ vẽ = chỉ chọn mặt
 function facetMode() {
   if (!penOn()) return 'select';
@@ -746,8 +761,8 @@ const CURVED_PEN = new Set(['free', 'organic', 'smooth', 'arc', 'curve', 'circle
 function penHint(auto) { const k = penShape(); return k ? `Cọ vẽ: ${PEN.penName(k).toLowerCase()}${PEN.isClosedShape(k) ? ' · khoanh / kéo theo đường chéo (hình tròn, ngũ giác: kéo từ tâm)' : ''}` : auto; }
 function penTarget() {
   if (penOp()) return '';
-  const t = DRAW_TOOLS.has(S.tool) ? S.tool : 'sketch';
-  const n = { road: 'Đường', footpath: 'Đường đi bộ', building: 'Công trình', zone: 'Ô đất SDĐ', park: 'Cây xanh', water: 'Sông hồ', land: 'Cảnh quan', cover: 'Vật liệu phủ', cloud: 'Vùng mây', arrow: 'Mũi tên', flow: 'Nét đứt', tour: 'Tour', face: 'Khối trên mái', sketch: 'Nét vẽ' }[t];
+  const t = penLayerTool() ? S.tool : 'sketch';
+  const n = { road: 'Đường', footpath: 'Đường đi bộ', building: 'Công trình', zone: 'Ô đất SDĐ', park: 'Cây xanh', water: 'Sông hồ', land: 'Cảnh quan', cover: 'Vật liệu phủ', cloud: 'Vùng mây', arrow: 'Mũi tên', flow: 'Nét đứt', tour: 'Tour', face: 'Khối trên mái', sketch: 'Cọ nháp' }[t];
   return n;
 }
 function togglePenBar(force) {
@@ -804,7 +819,7 @@ const OP_HINT = {
 // điểm bắt (đầu / cuối nét) khi bật Bắt điểm
 function penSnapFn(sc) {
   if (!penOn() || !S.opts.pen.osnap) return null;
-  const items = S.doc.items.filter((i) => i.kind !== 'facet');
+  const items = M.liveItems(S.doc).filter((i) => i.kind !== 'facet');
   return (q) => { const sn = AX.osnap(items, q, 16 / sc, null); return sn ? sn.q : q; };
 }
 function penGeomFor(raw, sc) {
@@ -834,7 +849,7 @@ function penStep() {
   return '';
 }
 const NO_EDIT = ['junction', 'facet', 'icon'];
-const pickFor = (w, sc, ok) => hitAll(S.doc, w, sc).find((i) => !NO_EDIT.includes(i.kind) && inIso(i) && ok(i)) || null;
+const pickFor = (w, sc, ok, edit = true) => { const all = hitAll(S.doc, w, sc).filter((i) => !NO_EDIT.includes(i.kind) && inIso(i) && ok(i)); const r = all.find((i) => !edit || canEdit(i)); if (!r && all.length) noEditToast(all[0]); return r || null; };
 function penTrim(w, sc) {
   const T = S.penLim;
   if (!T) {
@@ -901,7 +916,7 @@ function cutPolyItem(it, lim, w) {
   changed(); return true;
 }
 // ---- Bán kính cong nối 2 đối tượng (Fillet) ----
-const joinable = (i) => !isClosedItem(i) && OPEN_KINDS.has(i.kind) && i.pts && i.pts.length >= 2;
+const joinable = (i) => (i.kind === 'road' ? !i.props.ring : !isClosedItem(i) && OPEN_KINDS.has(i.kind)) && i.pts && i.pts.length >= 2;
 function nearestSeg(P, w) { let b = null; for (let i = 0; i < P.length - 1; i++) { const r = G.distToSegment(w, P[i], P[i + 1]); if (!b || r.d < b.d) b = { i, d: r.d }; } return b; }
 function penJoin(w, sc) {
   const hit = pickFor(w, sc, joinable);
@@ -911,6 +926,7 @@ function penJoin(w, sc) {
   if (!A) { S.penJoin = { id: hit.id, w: w.slice() }; syncPenBar(); requestRender('ov'); toast('② Chạm đối tượng thứ hai'); return; }
   if (hit.id === A.id) { toast('② Chạm đối tượng thứ hai (khác đối tượng thứ nhất)'); return; }
   const w1 = S.penJoin.w, R = S.opts.pen.J ?? 10; S.penJoin = null;
+  if (A.kind === 'road' || hit.kind === 'road') return joinRoads(A, hit, w1, w, R);
   const s1 = nearestSeg(A.pts, w1), s2 = nearestSeg(hit.pts, w);
   const r = PEN.joinArc(A.pts[s1.i], A.pts[s1.i + 1], w1, hit.pts[s2.i], hit.pts[s2.i + 1], w, R);
   if (!r) { toast('Hai đối tượng song song (hoặc thẳng hàng), không nối được'); syncPenBar(); requestRender('ov'); return; }
@@ -931,12 +947,32 @@ function penJoin(w, sc) {
   changed(); syncPenBar();
   toast(`Đã nối bằng cung tròn R = ${G.fmtNum(R)} m`);
 }
+// hai đường giao thông: kéo / cắt tim tới giao điểm, gộp thành một đường có bán kính cong R tại góc
+function joinRoads(A, B, w1, w2, R) {
+  if (A.kind !== 'road' || B.kind !== 'road') { toast('Bán kính cong: chọn hai đường giao thông, hoặc hai nét (đường thẳng, đường cong)'); syncPenBar(); requestRender('ov'); return; }
+  const tim = (r) => (r.props.pis && !r.props.ctrl ? r.props.pis : r.pts).map((q) => [q[0], q[1]]);
+  const P1 = tim(A), P2 = tim(B), s1 = nearestSeg(P1, w1), s2 = nearestSeg(P2, w2);
+  const r = PEN.joinArc(P1[s1.i], P1[s1.i + 1], w1, P2[s2.i], P2[s2.i + 1], w2, R);
+  if (!r) { toast('Hai đường song song (hoặc thẳng hàng), không nối được'); syncPenBar(); requestRender('ov'); return; }
+  const t1 = PEN.trimToPoint(P1, s1.i, r.X, r.X, w1), t2 = PEN.trimToPoint(P2, s2.i, r.X, r.X, w2);
+  const p1 = t1.atEnd ? t1.pts : t1.pts.slice().reverse(), p2 = t2.atEnd ? t2.pts.slice().reverse() : t2.pts;
+  const pis = p1.concat(p2.slice(1));
+  const oldR = (rd, P) => { const m = new Map(); (P === P1 && !A.props.ctrl ? A.props.radii : P === P2 && !B.props.ctrl ? B.props.radii : []).forEach((v, i) => m.set(P[i + 1].join(','), v)); return m; };
+  const r1 = oldR(0, P1), r2 = oldR(0, P2);
+  const radii = pis.slice(1, -1).map((q) => (G.dist(q, r.X) < 1e-6 ? R : r1.get(q.join(',')) ?? r2.get(q.join(',')) ?? 0));
+  checkpoint();
+  const pr = A.props; delete pr.ctrl; delete pr.smooth; delete pr.ring; delete pr.radiiEff;
+  pr.pis = pis; pr.radii = radii; setRoadGeometry(A);
+  S.doc.items = S.doc.items.filter((i) => i !== B);
+  changed(); syncPenBar();
+  toast(`Đã nối hai đường bằng bán kính cong R = ${G.fmtNum(R)} m`);
+}
 // ---- Offset ----
 function penOffset(w, sc) {
   const D = S.opts.pen.D ?? 3;
   const src = S.penOff && S.doc.items.find((i) => i.id === S.penOff);
   if (!src) {
-    const hit = pickFor(w, sc, (i) => (i.kind === 'circle' || (i.pts && i.pts.length >= 2)));
+    const hit = pickFor(w, sc, (i) => (i.kind === 'circle' || (i.pts && i.pts.length >= 2)), false);
     if (!hit) { toast('① Chạm vào đối tượng cần offset'); return; }
     S.penOff = hit.id; syncPenBar(); requestRender('ov'); toast('② Chạm vào phía muốn đặt bản offset'); return;
   }
@@ -954,7 +990,8 @@ function penOffset(w, sc) {
     const o = PEN.offsetClosed(ring, D, w);
     it = src.kind === 'sketch' || src.kind === 'cad' ? { ...JSON.parse(JSON.stringify(src)), id: M.uid(), pts: fz(src.kind === 'sketch' ? o.concat([o[0]]) : o) } : newItem('sketch', o.concat([o[0]]).map((q) => [q[0], q[1], 0.5]), { color: S.opts.sketch.color, width: 2 / sc });
   } else {
-    it = { ...JSON.parse(JSON.stringify(src)), id: M.uid(), pts: fz(PEN.offsetOpen(src.pts, D, w)) };
+    const op2 = PEN.offsetOpen(src.pts, D, w);
+    it = canEdit(src) ? { ...JSON.parse(JSON.stringify(src)), id: M.uid(), pts: fz(op2) } : newItem('sketch', op2.map((q) => [q[0], q[1], 0.5]), { color: S.opts.sketch.color, width: 2 / sc });
     if (it.props && it.props.ctrl) delete it.props.ctrl;
   }
   checkpoint(); S.doc.items.push(it); changed(); syncPenBar();
@@ -964,7 +1001,8 @@ function penOffset(w, sc) {
 function penExtrude(w, sc) {
   const H = S.opts.pen.H ?? 10;
   const ringOf = (i) => { if (isClosedItem(i)) return i.pts.map((q) => [q[0], q[1]]); if ((i.kind === 'sketch' || i.kind === 'cad') && i.pts.length > 3 && G.dist(i.pts[0], i.pts[i.pts.length - 1]) < 1e-6) return i.pts.slice(0, -1).map((q) => [q[0], q[1]]); return null; };
-  const hit = pickFor(w, sc, (i) => !!ringOf(i));
+  if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Extrude'); return; }
+  const hit = pickFor(w, sc, (i) => !!ringOf(i), false);
   if (!hit) { toast('Chạm vào một hình khép kín (nét vẽ khép kín, ô đất, vật liệu phủ…) hoặc một công trình'); return; }
   if (M.isLocked(S.doc, hit)) { lockedToast(); return; }
   const floors = Math.max(1, Math.round(H / 3.3)), floorH = +(H / floors).toFixed(3);
@@ -985,7 +1023,7 @@ function syncPen3DTool() {
 function nearestCorner(w, sc) {
   const tol = 18 / sc; let best = null;
   for (const it of S.doc.items) {
-    if (!it.pts || !inIso(it) || ['junction', 'facet', 'icon', 'circle'].includes(it.kind)) continue;
+    if (!it.pts || !inIso(it) || ['junction', 'facet', 'icon', 'circle'].includes(it.kind) || !canEdit(it)) continue;
     if (it.kind === 'road') {
       if (!it.props.pis || it.props.ring) continue;
       const P = it.props.pis;
@@ -1010,7 +1048,7 @@ function junctionAt(w, sc) {
 }
 function penCorner(op, w, sc) {
   const p = S.opts.pen, val = op === 'fillet' ? p.R ?? 5 : p.V ?? 3;
-  const jHit = junctionAt(w, sc);
+  const jHit = editOn('road') ? junctionAt(w, sc) : null;
   const c = jHit && jHit.exact ? null : nearestCorner(w, sc);
   if (c) {
     if (M.isLocked(S.doc, c.it)) { lockedToast(); return; }
@@ -1079,7 +1117,7 @@ function carveAllJunctions(only = null) { let n = 0; for (const j of S.doc.items
 
 // ---------------- Thước đo khoảng cách ----------------
 function measureSnap(w, sc) {
-  const sn = AX.osnap(S.doc.items.filter((i) => i.kind !== 'facet'), w, 14 / sc, null);
+  const sn = AX.osnap(M.liveItems(S.doc).filter((i) => i.kind !== 'facet'), w, 14 / sc, null);
   return sn ? sn.q : w;
 }
 function measureLen(m) { let L = 0; for (let i = 1; i < m.pts.length; i++) L += G.dist(m.pts[i - 1], m.pts[i]); return L; }
@@ -1123,6 +1161,7 @@ function renderToolOpts() {
   const title = (t) => box.append(h(`<span class="title">${S.mode === '3d' ? '3D · ' : ''}${t}</span>`));
   const hint = (t) => box.append(h(`<span class="muted" style="font-size:12.5px">${t}</span>`));
   const toggle = (label, key, onMsg) => { const c = h(`<button class="chip ${o[key] ? 'on' : ''}">${label}</button>`); c.onclick = () => { o[key] = !o[key]; saveOpts(); renderToolOpts(); if (onMsg) toast(o[key] ? onMsg + ': bật' : onMsg + ': tắt'); }; box.append(c); };
+  if (groupOf(S.tool) === 'land') box.append(editChk('land'));
   if (groupOf(S.tool) === 'land') { // công cụ Cảnh quan gộp: Cảnh quan / Cây xanh / Sông hồ
     const sg = h('<div class="seg lgrp"></div>');
     for (const [k, n] of TOOL_GROUPS.land.tools) { const b = h(`<button class="${S.tool === k ? 'on' : ''}">${n}</button>`); b.onclick = () => setTool(k); sg.append(b); }
@@ -1209,7 +1248,7 @@ function renderToolOpts() {
     }
     case 'eraser': title('Xoá'); box.append(h(`<span class="muted" style="font-size:13px">Chạm hoặc quét bút qua đối tượng để xoá${S.mode === '3d' ? ' · trong 3D: chạm / quét qua nét vẽ trên mặt khối thì chỉ xoá nét đó' : ''}</span>`)); break;
     case 'road': {
-      title('Đường');
+      title('Đường'); box.append(editChk('road'));
       const sub = o.road.sub || 'type';
       { // hai nút con: Phân loại đường / Góc vát, bán kính
         const sg = h('<div class="seg road-sub"></div>');
@@ -1254,7 +1293,7 @@ function renderToolOpts() {
       break;
     }
     case 'building': {
-      title('Công trình');
+      title('Công trình'); box.append(editChk('building'));
       box.append(lbl('Số tầng', stepper(o.building.floors, 1, 1, (v) => { o.building.floors = v; saveOpts(); })));
       { const cs = h('<div class="chips bcol"><span class="muted" style="font-size:13px">Màu khối mới</span></div>'); const d0 = h(`<button class="chip ${!o.building.color ? 'on' : ''}">Mặc định</button>`); d0.onclick = () => { o.building.color = ''; saveOpts(); renderToolOpts(); }; cs.append(d0);
         for (const c of TONES.slice(0, 10)) { const b = h(`<button class="chip" style="width:28px;background:${c};${o.building.color === c ? 'box-shadow:0 0 0 3px #fff inset,0 0 0 2px #1d4ed8' : ''}" aria-label="Màu ${c}"></button>`); b.onclick = () => { o.building.color = c; saveOpts(); renderToolOpts(); }; cs.append(b); }
@@ -1339,7 +1378,7 @@ function renderToolOpts() {
       break;
     case 'park': title('Cọ cây xanh'); box.append(h('<span class="muted" style="font-size:13px">Tô hoặc khoanh vùng không gian xanh</span>')); break;
     case 'zone': {
-      title('SDĐ');
+      title('SDĐ'); box.append(editChk('zone'));
       const br = o.zone.brush || 'basic';
       const brushes = h('<div class="brushes"></div>');
       for (const [k, n, ic] of [['basic', 'SDĐ cơ bản', '<path d="M4 4h16v16H4z" fill="currentColor" fill-opacity=".25"/><path d="M4 4h16v16H4z"/>'], ['split', 'Chia SDĐ', '<path d="M3 4h18v16H3z" fill="currentColor" fill-opacity=".2"/><path d="M9 2l6 20" stroke-dasharray="3 2" stroke-width="2.4"/>'], ['merge', 'Nhập SDĐ', '<path d="M3 6h10v12H3z" fill="currentColor" fill-opacity=".25"/><path d="M13 9h8v6h-8"/><path d="M13 12h7M17 9l3 3-3 3"/>']]) {
@@ -1495,7 +1534,8 @@ function renderToolOpts() {
 // bảng tuỳ chọn bên phải: dừng phía trên bảng Chỉ tiêu quy hoạch
 function fitOpts() {
   const o = $('#toolOpts'), m = $('#hud'); if (!o || !o.offsetParent) return;
-  if ((PANEL.opts || {}).h) return;
+  if (dimsOf(PANEL.opts || {}, 'opts').h) return;
+  if (!portrait()) { o.style.maxHeight = ''; return; }
   const or = o.getBoundingClientRect(), mr = m && m.offsetParent ? m.getBoundingClientRect() : null;
   o.style.maxHeight = mr && mr.width && mr.left < or.right && mr.right > or.left && mr.top > or.top ? Math.max(140, mr.top - or.top - 10) + 'px' : '';
 }
@@ -1503,6 +1543,8 @@ if (window.ResizeObserver) new ResizeObserver(() => fitOpts()).observe($('#hud')
 window.addEventListener('resize', () => requestAnimationFrame(fitOpts));
 
 // ---------------- Bảng nổi: thu gọn + kéo di chuyển ----------------
+// bảng tuỳ chọn công cụ: cỡ kéo giãn nhớ riêng cho iPad dọc và iPad ngang
+function dimsOf(st, key) { return key === 'opts' && !portrait() ? st.L || (st.L = {}) : st; }
 function panelState(el, st) {
   el.classList.toggle('collapsed', !!st.min);
   // nút mở lại luôn hiện khi thu gọn (không phụ thuộc cấu trúc bên trong bảng)
@@ -1510,14 +1552,15 @@ function panelState(el, st) {
   if (st.min && !ro) { ro = h(`<button class="preopen">▴ ${esc(el.dataset.title || 'Mở lại')}</button>`); ro.onclick = (e) => { e.stopPropagation(); st.min = false; savePanels(); panelState(el, st); }; el.append(ro); }
   if (!st.min && ro) ro.remove();
   const mn = el.querySelector('.pmin'); if (mn) { mn.textContent = st.min ? '▴' : '▾'; mn.title = st.min ? 'Mở rộng' : 'Thu gọn'; }
-  if (st.w) el.style.width = st.w + 'px'; else el.style.width = '';
-  if (st.h) { el.style.height = st.h + 'px'; } else el.style.height = '';
+  const dm = dimsOf(st, el.dataset.pkey);
+  if (dm.w) el.style.width = dm.w + 'px'; else el.style.width = '';
+  if (dm.h) { el.style.height = dm.h + 'px'; } else el.style.height = '';
   if (st.x != null && el.offsetParent && el.dataset.pkey !== 'opts') {
     const pr = el.offsetParent.getBoundingClientRect();
     el.style.left = Math.max(0, Math.min(pr.width - 60, st.x)) + 'px'; el.style.top = Math.max(0, Math.min(pr.height - 40, st.y)) + 'px';
     el.style.right = 'auto'; el.style.bottom = 'auto';
     if (el.id === 'props' || el.id === 'pop') el.style.maxHeight = st.h ? 'none' : Math.max(160, pr.height - parseFloat(el.style.top) - 10) + 'px';
-  } else { el.style.left = el.style.top = el.style.right = el.style.bottom = ''; el.style.maxHeight = st.h ? 'none' : ''; }
+  } else { el.style.left = el.style.top = el.style.right = el.style.bottom = ''; el.style.maxHeight = dm.h ? 'none' : ''; }
 }
 // Kéo giãn bảng / hộp thoại ở cạnh trái, phải, dưới (bút lại gần cạnh: hiện biểu tượng co kéo)
 const RZ_ICON = { e: '<path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/>', w: '<path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/>', s: '<path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/>', se: '<path d="M6 6l12 12M6 12V6h6M18 12v6h-6"/>', sw: '<path d="M18 6L6 18M18 12V6h-6M6 12v6h6"/>' };
@@ -1527,14 +1570,23 @@ function rzTip(x, y, z) {
   if (!t) { t = h('<div id="rzTip"></div>'); document.body.append(t); }
   t.innerHTML = `<svg viewBox="0 0 24 24">${RZ_ICON[z]}</svg>`; t.hidden = false; t.style.left = x + 'px'; t.style.top = y + 'px';
 }
+function portrait() { return matchMedia('(orientation: portrait)').matches; }
+// nút co kéo luôn hiện ở góc dưới (góc trái khi bảng bám mép phải)
+function addRzHandle(el, key) {
+  el.querySelectorAll(':scope > .rzh').forEach((n) => n.remove());
+  const sw = key === 'opts' && portrait();
+  el.append(h(`<div class="rzh ${sw ? 'sw' : ''}"><b title="Kéo để đổi kích thước"><svg viewBox="0 0 24 24">${sw ? '<path d="M18 18H6V6M6 18l7-7M10 18H6v-4"/>' : '<path d="M6 18h12V6M18 18l-7-7M14 18h4v-4"/>'}</svg></b></div>`));
+}
+addEventListener('orientationchange', () => setTimeout(() => { if (S.doc) { renderToolOpts(); renderProps(); } }, 300));
 function enableResize(el, key) {
+  addRzHandle(el, key);
   if (el.dataset.rzBound) return; el.dataset.rzBound = '1';
   const zoneAt = (e) => {
     if (el.classList.contains('collapsed')) return '';
     const r = el.getBoundingClientRect(), m = e.pointerType === 'touch' ? 16 : 12;
     if (e.clientX < r.left - 2 || e.clientX > r.right + 2 || e.clientY < r.top || e.clientY > r.bottom + 2) return '';
     const L = e.clientX - r.left < m, R = r.right - e.clientX < m, B = r.bottom - e.clientY < m;
-    if (key === 'opts') return B && L ? 'sw' : L ? 'w' : B ? 's' : ''; // bảng tuỳ chọn bám mép phải: chỉ giãn cạnh trái / dưới
+    if (key === 'opts' && portrait()) return B && L ? 'sw' : L ? 'w' : B ? 's' : ''; // bảng tuỳ chọn bám mép phải: chỉ giãn cạnh trái / dưới
     return B && R ? 'se' : B && L ? 'sw' : R ? 'e' : L ? 'w' : B ? 's' : '';
   };
   let rz = null;
@@ -1544,20 +1596,26 @@ function enableResize(el, key) {
     rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : z);
   });
   el.addEventListener('pointerleave', () => { if (!rz) { delete el.dataset.rz; rzTip(0, 0, ''); } });
-  el.addEventListener('pointerdown', (e) => {
-    const z = zoneAt(e); if (!z || e.button > 0) return;
+  const start = (e, z) => {
     e.preventDefault(); e.stopPropagation();
     const st = PANEL[key] || (PANEL[key] = {}), r = el.getBoundingClientRect(), pr = el.offsetParent.getBoundingClientRect();
     if (key !== 'opts' && st.x == null) { st.x = Math.round(r.left - pr.left); st.y = Math.round(r.top - pr.top); }
     rz = { z, x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, l0: st.x, st };
     el.dataset.rz = z; try { el.setPointerCapture(e.pointerId); } catch {}
+  };
+  el.addEventListener('pointerdown', (e) => {
+    const hb = e.target.closest && e.target.closest('.rzh b');
+    if (hb && el.contains(hb)) { start(e, hb.parentNode.classList.contains('sw') ? 'sw' : 'se'); return; } // nút co kéo ở góc: cả ngón tay
+    if (e.pointerType === 'touch') return;
+    const z = zoneAt(e); if (!z || e.button > 0) return;
+    start(e, z);
   }, true);
   el.addEventListener('pointermove', (e) => {
     if (!rz) return;
-    const dx = e.clientX - rz.x0, dy = e.clientY - rz.y0, st = rz.st;
-    if (rz.z.includes('e')) st.w = Math.max(220, Math.round(rz.w0 + dx));
-    if (rz.z.includes('w')) { st.w = Math.max(220, Math.round(rz.w0 - dx)); if (key !== 'opts') st.x = Math.round(rz.l0 + rz.w0 - st.w); }
-    if (rz.z.includes('s')) st.h = Math.max(120, Math.round(rz.h0 + dy));
+    const dx = e.clientX - rz.x0, dy = e.clientY - rz.y0, st = rz.st, dm = dimsOf(st, key);
+    if (rz.z.includes('e')) dm.w = Math.max(220, Math.round(rz.w0 + dx));
+    if (rz.z.includes('w')) { dm.w = Math.max(220, Math.round(rz.w0 - dx)); if (key !== 'opts') st.x = Math.round(rz.l0 + rz.w0 - dm.w); }
+    if (rz.z.includes('s')) dm.h = Math.max(120, Math.round(rz.h0 + dy));
     panelState(el, st); rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : rz.z);
     e.stopPropagation();
   }, true);
@@ -1904,7 +1962,7 @@ function zoneStroke(raw, sc, snap) {
     return true;
   }
   // nét hở: dùng nét làm ranh tạm, cùng đường / ô đất khác khép thành vùng; lấy vùng nhỏ hơn
-  const all = S.doc.items.filter((i) => ['road', 'water', 'zone', 'cad'].includes(i.kind)).flatMap((i) => i.pts).concat(shp);
+  const all = M.liveItems(S.doc).filter((i) => ['road', 'water', 'zone', 'cad'].includes(i.kind)).flatMap((i) => i.pts).concat(shp);
   const b = G.bbox(all); const span = Math.max(b.x1 - b.x0, b.y1 - b.y0) + 100;
   const off = Math.max(1.5 / sc, span / 260);
   const L = G.length(shp); const cands = [];
@@ -2139,7 +2197,7 @@ function toolDown(e, p, w, sc, in3d = false) {
   const op = penOp();
   if (op && op !== 'erase') { drag = { ...base, kind: 'tap', penOp: op }; return; }
   if (S.tool === 'measure' && !op) { if (w) measureDown(base, w, sc); return; }
-  if (penShape() && !DRAW_TOOLS.has(S.tool) && !op) { // Cọ vẽ khi không có lớp vẽ: nét vẽ thường
+  if (penOn() && !op && (penShape() ? !penLayerTool() : DRAW_TOOLS.has(S.tool) && !penLayerTool())) { // Cọ vẽ khi không có lớp vẽ (hoặc lớp chưa tích Chỉnh sửa): nét vào Cọ nháp
     drag = { ...base, kind: 'stroke', lastP: p, asTool: 'sketch' };
     S.stroke = { pts: [[w[0], w[1], e.pressure || 0.5]], screen: [p], snap: null, sc };
     return;
@@ -2188,7 +2246,7 @@ function toolDown(e, p, w, sc, in3d = false) {
     case 'eraser': {
       drag = { ...base, kind: 'erase', snap: snapItems(), removed: 0 };
       if (in3d) { const r = eraseFaceLine(e, sc); if (r) { drag.faceOnly = true; return; } }
-      const all = hitsAt(w, sc, true);
+      const all = hitsAt(w, sc, true).filter((i) => penOp() !== 'erase' || canEdit(i));
       if (all.length >= 2) { drag.pending = all; return; } // trùng chỗ: chờ nhấc bút, nếu là chạm thì hỏi xoá đối tượng nào
       eraseAt(w, sc); return;
     }
@@ -2288,7 +2346,7 @@ function toolMove(e, p, w, samples) {
     else if (G.dist(p, drag.lastP) > 4 && !penShape()) { drag.lastP = p; armHold(); }
     if (penOn() && S.opts.pen.osnap && w) { // dấu bắt điểm khi bút đến gần
       const pr = S.stroke.pts.length > 8 ? S.stroke.pts[S.stroke.pts.length - 8] : null;
-      S.osnapHint = AX.osnap(S.doc.items.filter((i) => i.kind !== 'facet'), w, 16 / drag.sc, pr);
+      S.osnapHint = AX.osnap(M.liveItems(S.doc).filter((i) => i.kind !== 'facet'), w, 16 / drag.sc, pr);
     }
     redrawLive();
     return;
@@ -2370,7 +2428,7 @@ function toolUp(e, p, w, cancelled) {
       const pg = !(st && st.snap) && penShape() && raw.length >= 2 ? penGeomFor(raw, d.sc) : null;
       if (st && pg) st.snap = pg;
       if (d.asTool) {
-        const it = pg && shapeByAxis(finishStroke(raw, d.sc, pg, 'sketch'), d.sc, 'pen', { circle: CURVED_PEN.has(pg.pen), pen: true });
+        const it = pg ? shapeByAxis(finishStroke(raw, d.sc, pg, 'sketch'), d.sc, 'pen', { circle: CURVED_PEN.has(pg.pen), pen: true }) : raw.length >= 2 && G.length(raw.map((q) => [q[0], q[1]])) > 6 / d.sc ? finishStroke(raw, d.sc, null, 'sketch') : null;
         if (it) { checkpoint(); S.doc.items.push(it); changed(); } else { redrawLive(); if (raw.length > 3) toast('Nét quá ngắn'); }
         break;
       }
@@ -2634,8 +2692,8 @@ function eraseFaceLine(e, sc) {
   return onSel ? 'face' : null; // chế độ chọn mặt: chạm trên mặt đang chọn chỉ xoá nét, không xoá cả khối
 }
 function eraseAt(w, sc) {
-  const hit = hitIso(S.doc, w, sc, true);
-  if (!hit && hitIso(S.doc, w, sc)) lockedToast();
+  const hit = penOp() === 'erase' ? hitsAt(w, sc, true).find(canEdit) || null : hitIso(S.doc, w, sc, true);
+  if (!hit) { const any = hitIso(S.doc, w, sc); const ne = penOp() === 'erase' && hitsAt(w, sc, true).find((i) => !canEdit(i)); if (ne) { if (Date.now() - lockToastAt > 2500) { lockToastAt = Date.now(); noEditToast(ne); } } else if (any) lockedToast(); }
   if (hit) {
     S.doc.items = S.doc.items.filter((i) => i !== hit);
     if (S.selectedId === hit.id) S.selectedId = null;
@@ -4303,6 +4361,11 @@ function openLayers() {
         };
       }
       box.append(row);
+      if (id === 0 && S.doc.items.some((i) => i.kind === 'cad')) { // nét DXF / CAD: chỉ để nhìn, hay tác động tới vẽ
+        const view = !!st.cadView, sub = h(`<div class="layer-sub"><span>Nét DXF / CAD:</span><div class="seg"><button class="${view ? 'on' : ''}" data-cv="1">👁 Chỉ để nhìn</button><button class="${view ? '' : 'on'}" data-cv="0">✎ Tác động khi vẽ</button></div><small class="muted">${view ? 'Không bắt điểm, không chọn được, không làm ranh giới phủ màu SDĐ, cắt, tạo đường theo line' : 'Bắt điểm, làm ranh giới phủ màu SDĐ, giới hạn cắt, tạo đường theo line…'}</small></div>`);
+        sub.querySelectorAll('[data-cv]').forEach((b) => (b.onclick = () => { st.cadView = b.dataset.cv === '1'; changed(); openLayers(); toast(st.cadView ? 'Nét DXF chỉ để nhìn: không tác động tới thao tác vẽ' : 'Nét DXF tác động tới vẽ: bắt điểm, phủ màu SDĐ, cắt…'); }));
+        box.append(sub);
+      }
     });
     pop.querySelector('#lyAdd').onclick = () => {
       const nm = prompt('Tên lớp mới', 'Lớp ' + (S.doc.layers.filter((l) => l.id >= 100).length + 1));

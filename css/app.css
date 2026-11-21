@@ -105,10 +105,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .toolbar hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
 
 .toolopts { position: absolute; right: 12px; top: calc(68px + var(--safe-t)); z-index: 14; display: flex; align-items: center; align-content: flex-start; gap: 8px; flex-wrap: wrap; width: 330px; max-width: calc(100vw - 120px); max-height: calc(100% - 68px - var(--safe-t) - 96px); overflow-y: auto; overscroll-behavior: contain; background: rgba(255,255,255,.96); border-radius: var(--r); box-shadow: var(--shadow); padding: 8px 12px 10px; box-sizing: border-box; }
-.toolopts > .title, .toolopts > .muted, .toolopts > .seg, .toolopts > label:not(.chk), .toolopts > .axis-row, .toolopts > div, .toolopts > .chk-sum { flex: 1 1 100%; }
-.toolopts > .title { padding-right: 30px; }
-.toolopts .seg { flex-wrap: wrap; }
+@media (orientation: portrait) {
+  .toolopts > .title, .toolopts > .muted, .toolopts > .seg, .toolopts > label:not(.chk), .toolopts > .axis-row, .toolopts > div:not(.rzh), .toolopts > .chk-sum { flex: 1 1 100%; }
+  .toolopts > .title { padding-right: 30px; }
+  .toolopts .seg { flex-wrap: wrap; }
+}
 .toolopts > .pmin { position: absolute; top: 6px; right: 6px; }
+.toolopts > .title { padding-right: 30px; }
+.toolopts:has(> .rzh) { padding-bottom: 22px; }
+.topbar > .seg { flex: none; white-space: nowrap; }
+/* QP-20: màn hình ngang: hộp tuỳ chọn nằm ngang phía trên (dưới thanh Cọ vẽ), bảng thuộc tính bên phải */
+@media (orientation: landscape) {
+  .toolopts { right: auto; left: calc(92px + var(--safe-l)); width: auto; max-width: calc(100vw - 92px - 24px - var(--safe-l)); max-height: 44vh; padding: 6px 10px; }
+  .props { left: auto; right: 12px; }
+}
 .toolopts:empty { display: none; }
 .toolopts label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .toolopts .title { font-weight: 700; color: var(--brand); font-size: 14px; }
@@ -469,3 +479,22 @@ body.pen-on .toolopts { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 #rzTip[hidden] { display: none; }
 .penbar .pstep { font-size: 13px; font-weight: 600; color: #b45309; background: #fff7e6; border-radius: 8px; padding: 5px 9px; white-space: nowrap; }
 body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
+
+/* QP-20: nút kéo giãn luôn hiện ở góc dưới hộp thoại (dùng được bằng ngón tay, bút) */
+.rzh { position: sticky; bottom: 0; flex: 0 0 100%; height: 0; margin: 0; z-index: 5; pointer-events: none; display: block; clear: both; }
+.rzh b { background: rgba(255,255,255,.92); box-shadow: 0 1px 4px rgba(0,0,0,.18); position: absolute; bottom: -8px; right: -10px; width: 34px; height: 34px; border-radius: 10px 0 12px 0; display: grid; place-items: center; pointer-events: auto; touch-action: none; cursor: nwse-resize; color: #2563eb; }
+.rzh.sw b { right: auto; left: -10px; border-radius: 0 10px 0 12px; cursor: nesw-resize; }
+.rzh b svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.rzh b:active, .pnl[data-rz] .rzh b { background: #dbeafe; }
+.pnl.collapsed .rzh { display: none; }
+.editchk { font-weight: 600; }
+.editchk.on { color: #1d4ed8 !important; }
+.toolgrp { max-height: calc(100vh - 16px); overflow-y: auto; }
+.toolgrp .tg-sub { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; }
+.layer-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 4px 8px 8px 34px; font-size: 13px; }
+.layer-sub small { flex: 1 1 100%; }
+/* QP-20: iPad dọc: thanh trên chật, bỏ nút phóng to / thu nhỏ (đã có chụm 2 ngón) để 2D/3D và nút cài đặt không bị đẩy ra ngoài */
+@media (orientation: portrait) and (max-width: 900px) {
+  .topbar #zoomIn, .topbar #zoomOut { display: none; }
+  .topbar .doc-name { min-width: 90px; }
+}

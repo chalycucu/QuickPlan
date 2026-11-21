@@ -1,6 +1,6 @@
 // Cọ đường (QP-17): phân loại đường, tạo đường theo nét line / polyline, cắt đường, góc vát vỉa hè và bán kính bó vỉa tại giao lộ.
 import * as G from './geom.js';
-import { roadTotalWidth } from './model.js';
+import { roadTotalWidth, cadInert } from './model.js';
 
 // Cấp đường / loại đường (QCVN 01:2021) và mặt cắt mặc định: lòng đường, vỉa hè mỗi bên (m)
 export const ROAD_LEVELS = { dt: 'Cấp đô thị', kv: 'Cấp khu vực', nb: 'Cấp nội bộ' };
@@ -127,7 +127,7 @@ export function nearestEdge(doc, w, tol, kinds = null) {
     for (let k = 0; k < (closed ? n : n - 1); k++) { const a = P[k], b = P[(k + 1) % n], q = G.distToSegment(w, a, b); if (q.d <= tol && (!best || q.d < best.d)) best = { it, a: [a[0], a[1]], b: [b[0], b[1]], d: q.d, P, closed }; }
   };
   for (const it of doc.items) {
-    if (!it.pts || it.pts.length < 2 || (kinds && !kinds.includes(it.kind))) continue;
+    if (!it.pts || it.pts.length < 2 || (kinds && !kinds.includes(it.kind)) || cadInert(doc, it)) continue;
     if (it.kind === 'road') {
       test(it, it.pts, false);
       if (!kinds || kinds.includes('road-edge')) { const s = G.offsetSides(it.pts, roadTotalWidth(it) / 2); test(it, s.L, false); test(it, s.R, false); }

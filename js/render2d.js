@@ -5,7 +5,7 @@ import { ICONS, drawIconAt, drawInk, inkSize } from './icons.js';
 import { matImage, findMat } from './materials.js';
 import { drawAxisGrid } from './axis.js';
 import { junctionCorners } from './roadops.js';
-import { LANDUSE, roadTotalWidth, itemArea, lotName, layerOf, layerOrder, landTrees, landTreeSize, LAND_CLOSED, LAND_COLORS, TREE_TYPES } from './model.js';
+import { LANDUSE, roadTotalWidth, itemArea, lotName, layerOf, layerOrder, cadInert, landTrees, landTreeSize, LAND_CLOSED, LAND_COLORS, TREE_TYPES } from './model.js';
 
 export class View {
   constructor() { this.cx = 0; this.cy = 0; this.scale = 2; this.w = 1; this.h = 1; this.rot = 0; }
@@ -596,7 +596,7 @@ export function hitTest(doc, p, scale, skipLocked = false) {
   // lớp trên cùng được ưu tiên; trong một lớp ưu tiên theo loại đối tượng
   const rank = new Map(layerOrder(doc).map((id, i) => [id, i]));
   const ko = new Map(order.map((k, i) => [k, i]));
-  const cand = doc.items.map((it, i) => ({ it, i, L: layerOf(it) })).filter((c) => vis[c.L] && !(skipLocked && locked[c.L]));
+  const cand = doc.items.map((it, i) => ({ it, i, L: layerOf(it) })).filter((c) => vis[c.L] && !(skipLocked && locked[c.L]) && !cadInert(doc, c.it));
   cand.sort((a, b) => (rank.get(b.L) ?? 0) - (rank.get(a.L) ?? 0) || (ko.get(a.it.kind) ?? 99) - (ko.get(b.it.kind) ?? 99) || b.i - a.i);
   for (const c of cand) if (hitItem(c.it, p, tol)) return c.it;
   return null;
@@ -609,7 +609,7 @@ export function hitAll(doc, p, scale, skipLocked = false) {
   const order = ['icon', 'sketch', 'arrow', 'flow', 'circle', 'cloud', 'facet', 'building', 'land', 'road', 'park', 'cover', 'water', 'zone', 'cad'];
   const rank = new Map(layerOrder(doc).map((id, i) => [id, i]));
   const ko = new Map(order.map((k, i) => [k, i]));
-  const cand = doc.items.map((it, i) => ({ it, i, L: layerOf(it) })).filter((c) => vis[c.L] && !(skipLocked && locked[c.L]) && c.it.kind !== 'facet');
+  const cand = doc.items.map((it, i) => ({ it, i, L: layerOf(it) })).filter((c) => vis[c.L] && !(skipLocked && locked[c.L]) && c.it.kind !== 'facet' && !cadInert(doc, c.it));
   cand.sort((a, b) => (rank.get(b.L) ?? 0) - (rank.get(a.L) ?? 0) || (ko.get(a.it.kind) ?? 99) - (ko.get(b.it.kind) ?? 99) || b.i - a.i);
   return cand.filter((c) => hitItem(c.it, p, tol)).map((c) => c.it);
 }

@@ -3,7 +3,7 @@ import * as G from './geom.js';
 import { LU_PLANS, LU_TABLES } from './landuse-tables.js';
 import { junctionCorners } from './roadops.js';
 
-export const APP_VERSION = '0.26.0';
+export const APP_VERSION = '0.27.0';
 export const DESIGNER = 'Phan Trọng Tuệ';
 
 // Danh mục chức năng sử dụng đất: theo loại hình quy hoạch (QHC 1/10.000, QHC 1/5.000, QHPK 1/2.000, QHCT)
@@ -82,20 +82,24 @@ export const CAT_COLORS = { o: '#f6d36b', gt: '#9aa3ad', cx: '#86c96a', cc: '#e5
 
 export const LAYERS = [
   { id: 8, name: 'Ảnh nền (vệ tinh / Google)' },
-  { id: 0, name: 'Nền CAD (DXF / GIS) & nét vẽ' },
+  { id: 0, name: 'Nền CAD (DXF / GIS)' },
   { id: 1, name: 'Địa hình & Sông hồ' },
   { id: 2, name: 'Giao thông' },
   { id: 3, name: 'Sử dụng đất' },
   { id: 4, name: 'Sơ đồ phân tích' },
+  { id: 5, name: 'Cọ nháp' },
   { id: 6, name: 'Công trình' },
   { id: 9, name: 'Công trình hiện trạng' },
   { id: 7, name: 'Cảnh quan' },
 ];
 // thứ tự vẽ mặc định (từ dưới lên trên): lớp trên che lớp dưới
-export const LAYER_ORDER = [8, 0, 3, 7, 1, 2, 9, 6, 4];
+export const LAYER_ORDER = [8, 0, 3, 7, 1, 2, 9, 6, 4, 5];
 export const EXIST_LAYER = 9; // nhà hiện trạng (tải từ OpenStreetMap hoặc chuyển từ công trình)
 export const BASE_LAYER = 8; // lớp riêng của ảnh nền, tách khỏi lớp nét CAD (0)
-export const KIND_LAYER = { water: 1, road: 2, zone: 3, park: 7, land: 7, cover: 7, building: 6, facet: 6, arrow: 4, flow: 4, circle: 4, cloud: 4, icon: 4, sketch: 0, cad: 0, junction: 2 };
+export const KIND_LAYER = { water: 1, road: 2, zone: 3, park: 7, land: 7, cover: 7, building: 6, facet: 6, arrow: 4, flow: 4, circle: 4, cloud: 4, icon: 4, sketch: 5, cad: 0, junction: 2 };
+// QP-20: nét DXF / CAD «chỉ để nhìn» (Quản lý lớp, lớp 0): không bắt điểm, không chọn, không làm ranh giới phủ màu, cắt…
+export const cadInert = (doc, it) => it.kind === 'cad' && !!((doc.layers || []).find((l) => l.id === 0) || {}).cadView;
+export const liveItems = (doc) => doc.items.filter((it) => !cadInert(doc, it));
 // lớp người dùng tạo có số hiệu từ 100; đối tượng được gán vào đó giữ it.layer
 export const layerOf = (it) => (it.layer >= 100 || (it.layer === 9 && (it.kind === 'building' || it.kind === 'facet')) ? it.layer : KIND_LAYER[it.kind] ?? 4);
 export function isLocked(doc, it) { const l = doc.layers.find((x) => x.id === layerOf(it)); return !!(l && l.locked); }
@@ -108,8 +112,7 @@ export function layerOrder(doc) {
 export function layerName(doc, id) { const l = doc.layers.find((x) => x.id === id); return (l && l.name) || (LAYERS.find((x) => x.id === id) || {}).name || 'Lớp ' + id; }
 // Nâng cấp bản vẽ cũ: đủ các lớp, nét nháp sang lớp riêng
 export function upgradeDoc(d) {
-  // QP-18: bỏ lớp «Nét nháp» (id 5): nét nháp cũ thành nét vẽ thuộc lớp Nền CAD & nét vẽ
-  if (d.layers.some((l) => l.id === 5)) { d.layers = d.layers.filter((l) => l.id !== 5); if (d.layerOrder) d.layerOrder = d.layerOrder.filter((x) => x !== 5); for (const it of d.items) if (it.layer === 5) it.layer = null; }
+  // QP-20: lớp «Cọ nháp» (id 5) mặc định: nét vẽ (sketch) nằm ở đây; bản vẽ 0.24–0.26 tự thêm lớp
   const l3 = d.layers.find((l) => l.id === 3);
   // bản vẽ cũ: lớp Công trình / Cảnh quan tách ra từ lớp 3, giữ nguyên trạng thái hiện / khoá / độ rõ
   const l0 = d.layers.find((l) => l.id === 0), had8 = d.layers.some((l) => l.id === 8);
