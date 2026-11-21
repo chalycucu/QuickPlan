@@ -145,7 +145,7 @@
 <script>
 // Bộ nhớ đệm cũ (bản trước) còn điều khiển trang: chờ bản mới cài xong rồi tải lại một lần
 (function () {
-  var V = 'quickplan-v0.27.0';
+  var V = 'quickplan-v0.28.0';
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller || !window.caches) return;
   caches.has(V).then(function (ok) {
     if (ok) return;

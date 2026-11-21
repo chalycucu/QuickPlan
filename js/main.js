@@ -1555,6 +1555,7 @@ function panelState(el, st) {
   const dm = dimsOf(st, el.dataset.pkey);
   if (dm.w) el.style.width = dm.w + 'px'; else el.style.width = '';
   if (dm.h) { el.style.height = dm.h + 'px'; } else el.style.height = '';
+  placeRz(el);
   if (st.x != null && el.offsetParent && el.dataset.pkey !== 'opts') {
     const pr = el.offsetParent.getBoundingClientRect();
     el.style.left = Math.max(0, Math.min(pr.width - 60, st.x)) + 'px'; el.style.top = Math.max(0, Math.min(pr.height - 40, st.y)) + 'px';
@@ -1572,10 +1573,25 @@ function rzTip(x, y, z) {
 }
 function portrait() { return matchMedia('(orientation: portrait)').matches; }
 // nút co kéo luôn hiện ở góc dưới (góc trái khi bảng bám mép phải)
+const RZ_HOLD_MS = 280;
+const RZ_ARMED_SVG = '<svg class="i1" viewBox="0 0 24 24"><path d="M7 7l10 10M7 7h5M7 7v5M17 17h-5M17 17v-5"/></svg>';
+const rzIcon = (sw) => `<svg class="i0" viewBox="0 0 24 24">${sw ? '<path d="M8 8v8h8M8 16l8-8"/>' : '<path d="M16 8v8H8M16 16L8 8"/>'}</svg>`;
+// tay cầm luôn ở đúng góc dưới của hộp (kể cả khi hộp kéo cao hơn nội dung)
+function placeRz(el) {
+  const z = el.querySelector(':scope > .rzh'); if (!z) return;
+  z.style.marginTop = '';
+  if (!el.style.height) return;
+  const pb = parseFloat(getComputedStyle(el).paddingBottom) || 0, gap = el.clientHeight - pb - z.offsetTop;
+  if (gap > 1) z.style.marginTop = gap + 'px';
+}
 function addRzHandle(el, key) {
   el.querySelectorAll(':scope > .rzh').forEach((n) => n.remove());
   const sw = key === 'opts' && portrait();
-  el.append(h(`<div class="rzh ${sw ? 'sw' : ''}"><b title="Kéo để đổi kích thước"><svg viewBox="0 0 24 24">${sw ? '<path d="M18 18H6V6M6 18l7-7M10 18H6v-4"/>' : '<path d="M6 18h12V6M18 18l-7-7M14 18h4v-4"/>'}</svg></b></div>`));
+  const hz = h(`<div class="rzh ${sw ? 'sw' : ''}"><b title="Chạm và giữ rồi kéo để đổi kích thước">${rzIcon(sw)}${RZ_ARMED_SVG}</b></div>`);
+  // Safari iPad: chặn cuộn / phóng to trang và menu chạm-giữ khi ngón tay đặt trên tay cầm
+  for (const t of ['touchstart', 'touchmove']) hz.firstChild.addEventListener(t, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+  hz.firstChild.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.append(hz);
 }
 addEventListener('orientationchange', () => setTimeout(() => { if (S.doc) { renderToolOpts(); renderProps(); } }, 300));
 function enableResize(el, key) {
@@ -1596,6 +1612,13 @@ function enableResize(el, key) {
     rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : z);
   });
   el.addEventListener('pointerleave', () => { if (!rz) { delete el.dataset.rz; rzTip(0, 0, ''); } });
+  let hold = null;
+  const armRz = () => {
+    if (!hold || rz) return;
+    const hd = hold; el.dataset.rzarm = '1';
+    start({ preventDefault() {}, stopPropagation() {}, clientX: hd.x0, clientY: hd.y0, pointerId: hd.id }, hd.z);
+    if (hd.x !== hd.x0 || hd.y !== hd.y0) el.dispatchEvent(new PointerEvent('pointermove', { clientX: hd.x, clientY: hd.y, pointerId: hd.id, pointerType: hd.pt, bubbles: true }));
+  };
   const start = (e, z) => {
     e.preventDefault(); e.stopPropagation();
     const st = PANEL[key] || (PANEL[key] = {}), r = el.getBoundingClientRect(), pr = el.offsetParent.getBoundingClientRect();
@@ -1605,12 +1628,25 @@ function enableResize(el, key) {
   };
   el.addEventListener('pointerdown', (e) => {
     const hb = e.target.closest && e.target.closest('.rzh b');
-    if (hb && el.contains(hb)) { start(e, hb.parentNode.classList.contains('sw') ? 'sw' : 'se'); return; } // nút co kéo ở góc: cả ngón tay
+    if (hb && el.contains(hb)) { // QP-21: tay cầm góc: chạm và giữ -> tay cầm hoá nút tròn ⤡, rồi di bút / ngón tay để co kéo
+      e.preventDefault(); e.stopPropagation();
+      const z = hb.parentNode.classList.contains('sw') ? 'sw' : 'se';
+      if (hold) clearTimeout(hold.t);
+      hold = { hb, z, id: e.pointerId, pt: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
+      hold.t = setTimeout(() => armRz(), RZ_HOLD_MS);
+      try { el.setPointerCapture(e.pointerId); } catch {}
+      return;
+    }
     if (e.pointerType === 'touch') return;
     const z = zoneAt(e); if (!z || e.button > 0) return;
     start(e, z);
   }, true);
   el.addEventListener('pointermove', (e) => {
+    if (hold && !rz && e.pointerId === hold.id) { // chưa giữ đủ lâu
+      hold.x = e.clientX; hold.y = e.clientY; e.stopPropagation(); e.preventDefault();
+      if (Math.hypot(hold.x - hold.x0, hold.y - hold.y0) > 6) { clearTimeout(hold.t); if (hold.pt === 'touch') { hold = null; } else armRz(); } // bút / chuột di luôn cũng co kéo được; ngón tay phải giữ
+      return;
+    }
     if (!rz) return;
     const dx = e.clientX - rz.x0, dy = e.clientY - rz.y0, st = rz.st, dm = dimsOf(st, key);
     if (rz.z.includes('e')) dm.w = Math.max(220, Math.round(rz.w0 + dx));
@@ -1619,7 +1655,10 @@ function enableResize(el, key) {
     panelState(el, st); rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : rz.z);
     e.stopPropagation();
   }, true);
-  const end = (e) => { if (!rz) return; rz = null; savePanels(); delete el.dataset.rz; rzTip(0, 0, ''); e.stopPropagation(); };
+  const end = (e) => {
+    if (hold) { clearTimeout(hold.t); hold = null; }
+    delete el.dataset.rzarm;
+    if (!rz) return; rz = null; savePanels(); delete el.dataset.rz; rzTip(0, 0, ''); e.stopPropagation(); };
   el.addEventListener('pointerup', end, true); el.addEventListener('pointercancel', end, true);
 }
 function panelChrome(el, key, title, host = null) {
