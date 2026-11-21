@@ -188,10 +188,12 @@ $$('[data-od]').forEach((e) => (e.onclick = () => openODDialog()));
 function openODDialog() {
   const dlg = h(`<dialog class="pc-dlg od-dlg"><form method="dialog">
     <h3>Lưu song song lên OneDrive</h3>
+    <p id="odPc" class="pc-msg">Đang hỏi máy tính…</p>
+    <details id="odDirect" ${OD.od.clientId ? 'open' : ''}><summary>iPad lưu thẳng lên OneDrive (cần mã ứng dụng Microsoft)</summary>
     <p class="muted">Bản vẽ và file xuất được lưu thêm vào một thư mục OneDrive mỗi khi có mạng (gửi bù khi mất mạng). Lưu trên iPad và lưu về PC vẫn chạy như cũ.</p>
     <label>Thư mục trên OneDrive <input id="odFolder" class="txt" value="${esc(OD.od.folder)}"></label>
-    <details ${OD.od.clientId ? '' : 'open'}><summary>Mã ứng dụng Microsoft (Client ID)</summary><input id="odCid" class="txt" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${esc(OD.od.clientId)}"><small class="muted">Tạo một lần ở entra.microsoft.com (App registrations, loại Single-page application, địa chỉ chuyển về ${esc(OD.redirectUri())}).</small></details>
-    <p id="odMsg" class="pc-msg"></p>
+    <details ${OD.od.clientId ? '' : 'open'}><summary>Mã ứng dụng Microsoft (Client ID)</summary><input id="odCid" class="txt" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${esc(OD.od.clientId)}"><small class="muted">Tạo một lần ở entra.microsoft.com (App registrations, loại Single-page application, địa chỉ chuyển về ${esc(OD.redirectUri())}). Tài khoản Microsoft cá nhân (live.com, outlook.com) không tạo được mã, cần tài khoản Azure hoặc tài khoản công ty.</small></details>
+    <p id="odMsg" class="pc-msg"></p></details>
     <div class="row"><button type="button" class="btn primary" id="odLogin"></button><button type="button" class="btn" id="odNow">Lưu ngay</button><button type="button" class="btn" id="odOff">Tắt / đăng xuất</button><button class="btn" value="close">Đóng</button></div>
   </form></dialog>`);
   document.body.append(dlg);
@@ -199,6 +201,7 @@ function openODDialog() {
   const sync = () => {
     const signed = OD.od.signedIn;
     dlg.querySelector('#odLogin').textContent = signed ? 'Đăng nhập tài khoản khác' : 'Đăng nhập Microsoft';
+    dlg.querySelector('#odLogin').hidden = !signed && !OD.od.clientId && !dlg.querySelector('#odDirect').open;
     dlg.querySelector('#odNow').hidden = !signed; dlg.querySelector('#odOff').hidden = !OD.od.enabled && !signed;
     if (signed) say(`Đang lưu vào OneDrive${OD.od.account ? ' của ' + OD.od.account : ''}, thư mục «${OD.od.folder}» (BanVe, XuatFile).${OD.od.msg ? ' ' + OD.od.msg : ''}`, OD.od.state === 'error' ? 'err' : 'ok');
     else if (OD.od.state === 'need-login' && OD.od.account) say('Phiên đăng nhập đã hết hạn. Bấm Đăng nhập Microsoft để tiếp tục lưu (các bản vẽ đã sửa sẽ được gửi bù).', 'err');
@@ -207,7 +210,7 @@ function openODDialog() {
   const keep = () => { OD.od.folder = dlg.querySelector('#odFolder').value; OD.od.clientId = dlg.querySelector('#odCid').value; };
   dlg.querySelector('#odLogin').onclick = async () => {
     keep();
-    if (!OD.od.clientId) { say('Dán mã ứng dụng (Client ID) trước', 'err'); dlg.querySelector('details').open = true; return; }
+    if (!OD.od.clientId) { say('Dán mã ứng dụng (Client ID) trước', 'err'); dlg.querySelectorAll('details').forEach((d) => (d.open = true)); return; }
     if (!OD.supported()) { say('Cần mở QuickPlan bằng địa chỉ https (bản web) để đăng nhập OneDrive', 'err'); return; }
     if (S.doc) await saveNow();
     say('Đang chuyển sang trang đăng nhập Microsoft…');
@@ -216,7 +219,13 @@ function openODDialog() {
   dlg.querySelector('#odNow').onclick = async () => { keep(); say('Đang lưu…'); await OD.syncNow(Store.odIO); sync(); };
   dlg.querySelector('#odOff').onclick = () => { OD.od.enabled = false; OD.logout(); sync(); renderOD(); toast('Đã tắt lưu OneDrive'); };
   dlg.addEventListener('close', () => { keep(); dlg.remove(); });
+  dlg.querySelector('#odDirect').addEventListener('toggle', sync);
   sync(); dlg.showModal();
+  const pcMsg = dlg.querySelector('#odPc');
+  (PC.apiBase() === null ? Promise.reject(new Error('nopc')) : PC.api('/api/info', { cache: 'no-store' }).then((r) => r.json())).then((i) => {
+    if (i.onedriveDir) { pcMsg.textContent = `✓ Không cần cài gì thêm: QuickPlan.exe trên máy tính tự chép mọi bản vẽ và file xuất vào thư mục OneDrive ${i.onedriveDir} (BanVe, XuatFile). iPad gửi bù mỗi khi thấy máy tính.`; pcMsg.className = 'pc-msg ok'; }
+    else { pcMsg.textContent = i.version && i.version < '0.25' ? `QuickPlan.exe trên máy tính là bản ${i.version}. Cài bản 0.25.0 trở lên để máy tính tự chép bản vẽ vào OneDrive.` : 'Máy tính chưa có ứng dụng OneDrive (hoặc đã tắt chép sang OneDrive).'; pcMsg.className = 'pc-msg'; }
+  }).catch(() => { pcMsg.textContent = 'Cách dễ nhất: kết nối máy tính có QuickPlan.exe 0.25.0 và OneDrive. Máy tính sẽ tự chép mọi bản vẽ vào thư mục OneDrive\\QuickPlan.'; pcMsg.className = 'pc-msg'; });
 }
 // quay về từ trang đăng nhập Microsoft
 OD.handleRedirect().then((ok) => { if (ok) { toast('Đã kết nối OneDrive · bản vẽ sẽ được lưu song song vào thư mục «' + OD.od.folder + '»'); Store.listLocal().then(async (l) => { for (const d of l) { const full = await Store.getDrawing(d.id); if (full) await Store.putDrawing(full, { markDirty: false }); } odSync(500); }); } else odSync(1500); renderOD(); }).catch((e) => { console.warn(e); renderOD(); });
