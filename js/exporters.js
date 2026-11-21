@@ -72,7 +72,7 @@ function flatProps(it) {
 }
 
 // DXF R12 (mở được bằng AutoCAD, Civil 3D, QGIS…), trục Y hướng Bắc
-const DXF_LAYERS = { cad: 'QP_0_NEN', water: 'QP_1_SONG_HO', road: 'QP_2_GIAO_THONG', zone: 'QP_3_SDD', park: 'QP_7_CANH_QUAN', land: 'QP_7_CANH_QUAN', building: 'QP_6_CONG_TRINH', arrow: 'QP_4_SO_DO', flow: 'QP_4_SO_DO', circle: 'QP_4_SO_DO', cloud: 'QP_4_SO_DO', icon: 'QP_4_BIEU_TUONG', sketch: 'QP_5_NHAP' };
+const DXF_LAYERS = { cad: 'QP_0_NEN', water: 'QP_1_SONG_HO', road: 'QP_2_GIAO_THONG', zone: 'QP_3_SDD', park: 'QP_7_CANH_QUAN', land: 'QP_7_CANH_QUAN', building: 'QP_6_CONG_TRINH', arrow: 'QP_4_SO_DO', flow: 'QP_4_SO_DO', circle: 'QP_4_SO_DO', cloud: 'QP_4_SO_DO', icon: 'QP_4_BIEU_TUONG', sketch: 'QP_0_NET_VE' };
 const DXF_COLORS = { QP_0_NEN: 8, QP_1_SONG_HO: 5, QP_2_GIAO_THONG: 9, QP_3_SDD: 2, QP_7_CANH_QUAN: 3, QP_6_CONG_TRINH: 7, QP_4_SO_DO: 1, QP_4_BIEU_TUONG: 6, QP_5_NHAP: 250, QP_TIM_DUONG: 1, QP_CHU: 7 };
 export function toDXF(doc) {
   const L = [];
@@ -141,7 +141,7 @@ export function toSVG(doc) {
     ...roads.filter((r) => !r.props.ped).map((r) => `<polyline points="${P(r.pts)}" stroke="#f4f1e8" stroke-width="0.25" stroke-dasharray="3 3"/>`), '</g>');
   out.push('<g id="CongTrinh">', ...items('building').map((b) => `<path d="${d(b.pts, true)}${(b.holes || []).map((h) => ' ' + d(h, true)).join('')}" fill="#fff" fill-rule="evenodd" stroke="#1d2a3a" stroke-width="0.5"/>`), '</g>');
   out.push('<g id="SoDo" fill="none">');
-  for (const it of doc.items.filter((i) => (KIND_LAYER[i.kind] === 4 || KIND_LAYER[i.kind] === 5) && vis(i.kind))) {
+  for (const it of doc.items.filter((i) => (KIND_LAYER[i.kind] === 4 || i.kind === 'sketch') && vis(i.kind))) {
     const col = it.props.color || ({ arrow: '#d9381e', flow: '#1f7a3a', circle: '#7b3fe4', cloud: '#c2410c' })[it.kind];
     if (it.kind === 'circle') { const c = P([it.pts[0]]).split(','); const lw = (it.props.width || 2) / 2; out.push(`<circle cx="${c[0]}" cy="${c[1]}" r="${it.props.radius}" stroke="${col}" stroke-width="${lw}" ${it.props.dash !== false ? `stroke-dasharray="${lw * 4} ${lw * 3}"` : ''}/>`); }
     else if (it.kind === 'icon') {

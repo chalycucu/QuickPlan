@@ -35,7 +35,7 @@
       <p class="muted">From Rough Stroke to Precise Plan in Real-Time</p>
     </div>
     <div class="spacer"></div>
-    <span class="sync-pill" data-sync></span>
+    <span class="sync-pill" data-sync></span><span class="sync-pill od off click" data-od role="button" tabindex="0">☁ OneDrive</span>
   </header>
   <div class="home-actions">
     <button class="btn primary" id="btnNew">＋ Bản vẽ mới</button>
@@ -71,7 +71,7 @@
       <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <input id="docName" class="doc-name" aria-label="Tên bản vẽ">
-    <span class="sync-pill" data-sync></span>
+    <span class="sync-pill" data-sync></span><span class="sync-pill od off click" data-od role="button" tabindex="0">☁ OneDrive</span>
     <div class="spacer"></div>
     <div class="zoomctl">
       <button class="ibtn" id="zoomNorth" hidden title="Bản vẽ đang xoay – chạm để đưa hướng Bắc lên trên" aria-label="Hướng Bắc lên trên"><svg viewBox="0 0 24 24" style="transition:transform .15s"><path d="M12 3l4 9h-8z" fill="#dc2626" stroke="#dc2626"/><path d="M12 21l-4-9h8z"/><text x="12" y="11" font-size="0" /></svg></button>
@@ -145,7 +145,7 @@
 <script>
 // Bộ nhớ đệm cũ (bản trước) còn điều khiển trang: chờ bản mới cài xong rồi tải lại một lần
 (function () {
-  var V = 'quickplan-v0.23.1';
+  var V = 'quickplan-v0.24.0';
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller || !window.caches) return;
   caches.has(V).then(function (ok) {
     if (ok) return;

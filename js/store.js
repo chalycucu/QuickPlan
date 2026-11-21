@@ -4,11 +4,14 @@ const DB_NAME = 'quickplan';
 let dbp;
 function db() {
   if (!dbp) dbp = new Promise((res, rej) => {
-    const r = indexedDB.open(DB_NAME, 1);
+    const r = indexedDB.open(DB_NAME, 2);
     r.onupgradeneeded = () => {
-      const d = r.result;
-      d.createObjectStore('drawings', { keyPath: 'id' });
-      d.createObjectStore('dirty', { keyPath: 'id' });
+      const d = r.result, has = (n) => d.objectStoreNames.contains(n);
+      if (!has('drawings')) d.createObjectStore('drawings', { keyPath: 'id' });
+      if (!has('dirty')) d.createObjectStore('dirty', { keyPath: 'id' });
+      // OneDrive (0.24.0): bản vẽ chờ đẩy lên OneDrive, file xuất chờ đẩy
+      if (!has('oddirty')) d.createObjectStore('oddirty', { keyPath: 'id' });
+      if (!has('odexp')) d.createObjectStore('odexp', { keyPath: 'key', autoIncrement: true });
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -36,7 +39,17 @@ export async function listLocal() {
 export async function putDrawing(doc, { markDirty = true } = {}) {
   await tx('drawings', 'readwrite', (s) => s.put(doc));
   if (markDirty) await tx('dirty', 'readwrite', (s) => s.put({ id: doc.id }));
+  await tx('oddirty', 'readwrite', (s) => s.put({ id: doc.id })); // OneDrive: lưu cả bản kéo về từ PC
 }
+// ---------- Hàng đợi OneDrive ----------
+export const odIO = {
+  getDirty: () => tx('oddirty', 'readonly', (s) => req(s.getAll())),
+  getDrawing,
+  async clearDirty(id, updatedAt) { const cur = await getDrawing(id); if (updatedAt == null || !cur || cur.updatedAt === updatedAt) await tx('oddirty', 'readwrite', (s) => s.delete(id)); },
+  async nextExport() { const all = await tx('odexp', 'readonly', (s) => req(s.getAll())); return all[0] || null; },
+  doneExport: (key) => tx('odexp', 'readwrite', (s) => s.delete(key)),
+  queueExport: (name, blob) => tx('odexp', 'readwrite', (s) => s.add({ name, blob, at: Date.now() })),
+};
 export async function deleteDrawing(id) {
   const d = await getDrawing(id);
   if (!d) return;

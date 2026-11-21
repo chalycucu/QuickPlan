@@ -429,3 +429,25 @@ body.touring #toolOpts, body.touring #bar3d, body.touring #props, body.touring .
 .pc-msg.ok { color: #15803d; } .pc-msg.err { color: #b91c1c; }
 .pc-btns { display: flex; gap: 8px; align-items: center; }
 .pc-btns .spacer { flex: 1; }
+/* Cọ vẽ (QP-18): thanh vẽ trên cùng khung hình */
+.penbar { position: absolute; left: calc(92px + var(--safe-l)); right: 12px; top: calc(64px + var(--safe-t)); z-index: 16; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; background: rgba(255,255,255,.97); border-radius: var(--r); box-shadow: var(--shadow); padding: 5px 8px; }
+.penbar[hidden] { display: none; }
+.penbar .pgrp { display: flex; gap: 2px; flex-wrap: wrap; }
+.penbar .pb { width: 40px; height: 38px; border: 0; border-radius: 9px; background: transparent; color: var(--ink, #1d2a3a); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.penbar .pb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.penbar .pb.on { background: var(--brand); color: #fff; }
+.penbar .pb.px { margin-left: auto; }
+.penbar .psep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; }
+.penbar label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.penbar .ptarget { font-size: 12.5px; font-weight: 700; color: var(--brand); background: #eef2f8; border-radius: 99px; padding: 4px 10px; }
+.penbar .pen-axis { flex-basis: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+body.pen-on .toolopts { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
+.ms-res { font-size: 14px; color: #9f1239; }
+.ms-unit button { min-width: 40px; }
+
+.sync-pill.od { margin-left: 4px; }
+.sync-pill.od.off { background: #eef6ff; color: #1d4ed8; }
+.sync-pill.od.need-login { background: #fff3e0; color: #b45309; }
+.od-dlg .txt { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-top: 4px; }
+.od-dlg label, .od-dlg details { font-size: 13px; color: var(--muted); }
+.od-dlg .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
