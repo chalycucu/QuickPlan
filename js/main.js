@@ -493,12 +493,24 @@ function buildToolbar() {
     if (t[0] === 'view3d') b.onclick = () => toggle3DBar();
     else if (t[0] === 'pen') b.onclick = () => togglePenBar();
     else if (t[0] === 'analysis' || t[0] === 'bld') b.onclick = () => openToolGroup(b, t[0]);
-    else if (t[0] === 'land') b.onclick = () => setTool(groupOf(S.tool) === 'land' ? S.tool : (S.opts.landTool || 'land'));
-    else b.onclick = () => setTool(t[0]);
+    else if (t[0] === 'land') b.onclick = () => pickTool(groupOf(S.tool) === 'land' ? S.tool : (S.opts.landTool || 'land'));
+    else b.onclick = () => pickTool(t[0]);
     tb.append(b);
   }
   setTool(S.tool);
 }
+// QP-21: mỗi lúc chỉ một lệnh: chọn công cụ trên thanh trái thì bỏ lệnh Cọ vẽ đang làm (Xoá, Cắt, Bo, Offset…)
+function pickTool(t) {
+  closeToolGroup();
+  const p = S.opts.pen;
+  if (p && p.op) { const had = PEN.PEN_OPS.find((o) => o[0] === p.op); p.op = null; penReset(); saveOpts(); syncPen3DTool(); if (had) setTimeout(() => toast(`Đã bỏ lệnh ${had[1]}`), 0); }
+  else penReset();
+  S.measure = null; S.axisPick = false;
+  setTool(t);
+}
+// chọn lệnh trên thanh Cọ vẽ thì bỏ lệnh đang làm ở thanh trái (Thước đo, Xoá, Di chuyển, Kiểm tra…)
+const CMD_TOOLS = new Set(['measure', 'eraser', 'move', 'check']);
+function leaveCmdTool() { closeToolGroup(); if (CMD_TOOLS.has(S.tool)) setTool('select'); S.measure = null; }
 function setTool(t) {
   if (S.baseEdit) endBaseEdit(true);
   // trong nhóm Sửa khối: «Chọn khối» = công cụ Chọn, luôn chọn cả khối; «Sửa mặt» = Vẽ mặt khối ở kiểu chọn mặt
@@ -552,7 +564,7 @@ function openToolGroup(btn, g) {
   const box = h(`<div class="toolgrp" data-g="${g}" style="left:${r.right + 8}px;top:${Math.max(8, Math.min(r.top - 8, innerHeight - (g === 'bld' ? 640 : 330)))}px"><div class="tg-h">${TOOL_GROUPS[g].name}</div></div>`);
   for (const [k, n] of TOOL_GROUPS[g].tools) {
     const b = h(`<button class="tool ${(S.subTool || S.tool) === k ? 'on' : ''}" data-pick="${k}"><span class="ti"><svg viewBox="0 0 24 24">${ICONS[k]}</svg></span><span class="tl">${n}</span></button>`);
-    b.onclick = () => { closeToolGroup(); setTool(k); };
+    b.onclick = () => { closeToolGroup(); pickTool(k); };
     if (g === 'bld' && k === 'selbld') box.append(h('<div class="tg-h tg-sub">Sửa khối</div>'));
     if (g === 'bld' && k === 'preset') { box.append(lockRows(() => { closeToolGroup(); })); box.append(h('<div class="tg-h tg-sub">Khối</div>')); }
     box.append(b);
@@ -742,7 +754,16 @@ const editOn = (k) => !k || !!(S.opts.edit && S.opts.edit[k]);
 const canEdit = (it) => editOn(EDIT_KIND[it.kind]);
 const penLayerTool = () => DRAW_TOOLS.has(S.tool) && editOn(EDIT_TOOL[S.tool]); // nét Cọ vẽ thành đối tượng của lớp công cụ
 function noEditToast(it) { const k = EDIT_KIND[it.kind]; toast(`Lớp ${EDIT_NAME[k]} chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp ${EDIT_NAME[k]} để Cọ vẽ sửa đối tượng này`); }
+// QP-21: mỗi lúc chỉ một lớp ở chế độ Chỉnh sửa; hộp của lớp khác bị làm mờ cho tới khi thoát
+const editHolder = (key) => Object.keys(EDIT_NAME).find((k) => k !== key && S.opts.edit && S.opts.edit[k]) || null;
+function exitEdit(k) { if (S.opts.edit) S.opts.edit[k] = false; saveOpts(); syncPenBar(); renderToolOpts(); requestRender(); toast(`Đã thoát chỉnh sửa lớp ${EDIT_NAME[k]}`); }
 function editChk(key) {
+  const other = editHolder(key);
+  if (other && !editOn(key)) {
+    const b = h(`<div class="editblk"><b>⚠ Chưa thoát lệnh chỉnh sửa lớp ${EDIT_NAME[other]}</b><button class="chip">Thoát chỉnh sửa ${EDIT_NAME[other]}</button></div>`);
+    b.querySelector('button').onclick = (e) => { e.stopPropagation(); exitEdit(other); };
+    return b;
+  }
   const on = editOn(key), c = h(`<label class="chk editchk ${on ? 'on' : ''}"><input type="checkbox" ${on ? 'checked' : ''}> ✏ Chỉnh sửa</label>`);
   c.querySelector('input').onchange = (e) => { S.opts.edit = { ...(S.opts.edit || {}), [key]: e.target.checked }; saveOpts(); syncPenBar(); renderToolOpts(); toast(e.target.checked ? `Cọ vẽ: thêm, sửa đối tượng lớp ${EDIT_NAME[key]}` : 'Cọ vẽ: nét mới vào lớp Cọ nháp'); };
   return c;
@@ -782,9 +803,9 @@ function syncPenBar() {
   const p = S.opts.pen;
   const ib = (k, n, ic, on, fn) => { const b = h(`<button class="pb ${on ? 'on' : ''}" data-pen="${k}" title="${n}" aria-label="${n}"><svg viewBox="0 0 24 24">${ic}</svg></button>`); b.onclick = fn; return b; };
   const g1 = h('<div class="pgrp"></div>');
-  for (const [k, n, ic] of PEN.PEN_SHAPES) g1.append(ib(k, n, ic, !p.op && p.shape === k, () => { p.shape = p.shape === k && !p.op ? null : k; p.op = null; penReset(); syncPen3DTool(); saveOpts(); syncPenBar(); renderToolOpts(); requestRender(); toast(p.shape ? 'Cọ vẽ: ' + n : 'Cọ vẽ: tự nhận dạng theo công cụ'); }));
+  for (const [k, n, ic] of PEN.PEN_SHAPES) g1.append(ib(k, n, ic, !p.op && p.shape === k, () => { leaveCmdTool(); p.shape = p.shape === k && !p.op ? null : k; p.op = null; penReset(); syncPen3DTool(); saveOpts(); syncPenBar(); renderToolOpts(); requestRender(); toast(p.shape ? 'Cọ vẽ: ' + n : 'Cọ vẽ: tự nhận dạng theo công cụ'); }));
   const g2 = h('<div class="pgrp"></div>');
-  for (const [k, n, ic] of PEN.PEN_OPS) g2.append(ib(k, n, ic, p.op === k, () => { p.op = p.op === k ? null : k; penReset(); saveOpts(); syncPen3DTool(); syncPenBar(); renderToolOpts(); requestRender(); if (S.mode === '3d' && v3) draw3DOverlay(); if (p.op) toast(OP_HINT[p.op]); }));
+  for (const [k, n, ic] of PEN.PEN_OPS) g2.append(ib(k, n, ic, p.op === k, () => { leaveCmdTool(); p.op = p.op === k ? null : k; penReset(); saveOpts(); syncPen3DTool(); syncPenBar(); renderToolOpts(); requestRender(); if (S.mode === '3d' && v3) draw3DOverlay(); if (p.op) toast(OP_HINT[p.op]); }));
   bar.append(g1, h('<span class="psep"></span>'), g2);
   if (p.op === 'fillet') bar.append(lbl('R (m)', stepper(p.R ?? 5, 0.1, 0.5, (v) => { p.R = v; saveOpts(); })));
   if (p.op === 'chamfer') bar.append(lbl('Vát (m)', stepper(p.V ?? 3, 0.1, 0.5, (v) => { p.V = v; saveOpts(); })));
@@ -1164,7 +1185,7 @@ function renderToolOpts() {
   if (groupOf(S.tool) === 'land') box.append(editChk('land'));
   if (groupOf(S.tool) === 'land') { // công cụ Cảnh quan gộp: Cảnh quan / Cây xanh / Sông hồ
     const sg = h('<div class="seg lgrp"></div>');
-    for (const [k, n] of TOOL_GROUPS.land.tools) { const b = h(`<button class="${S.tool === k ? 'on' : ''}">${n}</button>`); b.onclick = () => setTool(k); sg.append(b); }
+    for (const [k, n] of TOOL_GROUPS.land.tools) { const b = h(`<button class="${S.tool === k ? 'on' : ''}">${n}</button>`); b.onclick = () => pickTool(k); sg.append(b); }
     box.append(sg);
   }
   switch (S.tool) {

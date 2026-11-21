@@ -503,3 +503,8 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
   .topbar #zoomIn, .topbar #zoomOut { display: none; }
   .topbar .doc-name { min-width: 90px; }
 }
+
+/* QP-21: lớp khác đang Chỉnh sửa: hộp này mờ đi, chỉ còn dòng cảnh báo + nút thoát */
+.editblk { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.editblk .chip { border-color: #f97316; color: #c2410c; }
+.toolopts:has(.editblk) > :not(.editblk):not(.pmin):not(.rzh):not(.title), .toolgrp:has(.editblk) > :not(.editblk):not(.tg-sub) { opacity: .35; filter: grayscale(1); pointer-events: none; }
