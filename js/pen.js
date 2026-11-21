@@ -22,6 +22,9 @@ export const PEN_OPS = [
   ['trim', 'Cắt', '<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.5L20 16M8.2 15.5L20 8"/>'],
   ['fillet', 'Bo tròn theo bán kính', '<path d="M4 20V13a9 9 0 0 1 9-9h7"/><path d="M4 4v4M4 4h4" stroke-dasharray="1.5 2"/>'],
   ['chamfer', 'Tạo góc vát', '<path d="M4 20V10l6-6h10"/><path d="M4 4v4M4 4h4" stroke-dasharray="1.5 2"/>'],
+  ['join', 'Bán kính cong nối 2 đối tượng', '<path d="M3 20h6a8 8 0 0 0 8-8V3" stroke-dasharray="0"/><path d="M3 20h3M17 3v3" stroke-width="3"/>'],
+  ['offset', 'Offset (song song)', '<path d="M4 18L14 6"/><path d="M9 20l10-12" stroke-dasharray="2.5 2"/><path d="M16 15l2.5 1.5M16 15l1.5-2.5"/>'],
+  ['extrude', 'Extrude khối', '<path d="M4 16l8 4 8-4-8-4z" fill="currentColor" fill-opacity=".14"/><path d="M12 12V3M9 6l3-3 3 3M4 16V11M20 16V11"/>'],
 ];
 export const penName = (k) => ([...PEN_SHAPES, ...PEN_OPS].find((x) => x[0] === k) || [k, k])[1];
 const CLOSED_ONLY = new Set(['circle', 'tri', 'rect', 'ellipse', 'penta']);
@@ -206,4 +209,74 @@ export function fmtLen(m, unit = 'm') {
   const [u, k] = UNITS[unit] || UNITS.m, v = m * k;
   const d = Math.abs(v) >= 1000 ? 0 : Math.abs(v) >= 100 ? 1 : Math.abs(v) >= 1 ? 2 : 3;
   return v.toLocaleString('vi-VN', { maximumFractionDigits: d, minimumFractionDigits: 0 }) + ' ' + u;
+}
+
+// ---------- QP-19: cắt theo đối tượng giới hạn, offset, bán kính cong nối 2 đối tượng ----------
+function segX(p, q, a, b) { // giao 2 đoạn: t trên pq, u trên ab
+  const r = [q[0] - p[0], q[1] - p[1]], d = [b[0] - a[0], b[1] - a[1]], den = r[0] * d[1] - r[1] * d[0];
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((a[0] - p[0]) * d[1] - (a[1] - p[1]) * d[0]) / den, u = ((a[0] - p[0]) * r[1] - (a[1] - p[1]) * r[0]) / den;
+  return t > 1e-9 && t < 1 - 1e-9 && u >= -1e-9 && u <= 1 + 1e-9 ? { t, p: [p[0] + r[0] * t, p[1] + r[1] * t] } : null;
+}
+// nét giới hạn: nét mở được kéo dài hai đầu (ext m), nét khép kín giữ nguyên
+export function limitPath(L, closed, ext = 5000) {
+  const P = L.map((q) => [q[0], q[1]]);
+  if (closed) return G.dist(P[0], P[P.length - 1]) < 1e-6 ? P : P.concat([P[0]]);
+  if (P.length < 2) return P;
+  const e = (a, b) => { const l = G.dist(a, b) || 1; return [a[0] + ((a[0] - b[0]) / l) * ext, a[1] + ((a[1] - b[1]) / l) * ext]; };
+  return [e(P[0], P[1]), ...P, e(P[P.length - 1], P[P.length - 2])];
+}
+// Chia nét mở P tại các giao điểm với nét giới hạn; bỏ khúc gần điểm chạm w. null: không giao.
+export function cutPathBy(P, lim, w) {
+  const pieces = [[P[0].slice(0, 2)]];
+  for (let k = 0; k < P.length - 1; k++) {
+    const p = P[k], q = P[k + 1], xs = [];
+    for (let j = 0; j < lim.length - 1; j++) { const r = segX(p, q, lim[j], lim[j + 1]); if (r) xs.push(r); }
+    xs.sort((a, b) => a.t - b.t);
+    for (const x of xs) { pieces[pieces.length - 1].push(x.p); pieces.push([x.p]); }
+    pieces[pieces.length - 1].push(q.slice(0, 2));
+  }
+  if (pieces.length < 2) return null;
+  let bi = 0, bd = Infinity;
+  pieces.forEach((pc, i) => { const r = G.distToPolyline(w, pc, false).d; if (r < bd) { bd = r; bi = i; } });
+  return pieces.filter((pc, i) => i !== bi && pc.length >= 2 && G.length(pc) > 0.05);
+}
+// Offset nét mở về phía điểm chạm
+export function offsetOpen(P, d, w) {
+  const s = G.offsetSides(P.map((q) => [q[0], q[1]]), d);
+  return G.distToPolyline(w, s.L, false).d <= G.distToPolyline(w, s.R, false).d ? s.L : s.R;
+}
+// Offset đa giác: ra ngoài nếu chạm ngoài, vào trong nếu chạm trong
+export function offsetClosed(P, d, w) {
+  const Q = P.map((q) => [q[0], q[1]]);
+  const a = G.offsetPolygon(Q, d), b = G.offsetPolygon(Q, -d);
+  const big = Math.abs(G.area(a)) >= Math.abs(G.area(b)) ? a : b, small = big === a ? b : a;
+  return G.pointInPolygon(w, Q) ? small : big;
+}
+// Bán kính cong R nối đoạn (a1,b1) và (a2,b2), về phía hai điểm chạm w1, w2 (như lệnh FILLET).
+// Trả về { X, T1, T2, arc } (T1, T2: tiếp điểm, arc: các điểm cung từ T1 tới T2) hoặc null.
+export function joinArc(a1, b1, w1, a2, b2, w2, R) {
+  const d1 = [b1[0] - a1[0], b1[1] - a1[1]], d2 = [b2[0] - a2[0], b2[1] - a2[1]], den = d1[0] * d2[1] - d1[1] * d2[0];
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((a2[0] - a1[0]) * d2[1] - (a2[1] - a1[1]) * d2[0]) / den, X = [a1[0] + d1[0] * t, a1[1] + d1[1] * t];
+  const pr = (a, b, w) => { const l = G.dist(a, b), u = [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; const s = (w[0] - X[0]) * u[0] + (w[1] - X[1]) * u[1]; return s >= 0 ? u : [-u[0], -u[1]]; };
+  const u1 = pr(a1, b1, w1), u2 = pr(a2, b2, w2);
+  const cos = Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1])), th = Math.acos(cos);
+  if (th < 0.02 || th > Math.PI - 0.02) return null;
+  const k = R / Math.tan(th / 2), T1 = [X[0] + u1[0] * k, X[1] + u1[1] * k], T2 = [X[0] + u2[0] * k, X[1] + u2[1] * k];
+  const bis = [u1[0] + u2[0], u1[1] + u2[1]], bl = Math.hypot(bis[0], bis[1]), hc = R / Math.sin(th / 2);
+  const C = [X[0] + (bis[0] / bl) * hc, X[1] + (bis[1] / bl) * hc];
+  let A0 = Math.atan2(T1[1] - C[1], T1[0] - C[0]), A1 = Math.atan2(T2[1] - C[1], T2[0] - C[0]), dA = A1 - A0;
+  while (dA > Math.PI) dA -= 2 * Math.PI; while (dA < -Math.PI) dA += 2 * Math.PI;
+  const n = Math.max(6, Math.ceil(Math.abs(dA) / 0.12)), arc = [];
+  for (let i = 0; i <= n; i++) { const a = A0 + (dA * i) / n; arc.push([C[0] + R * Math.cos(a), C[1] + R * Math.sin(a)]); }
+  arc[0] = T1; arc[n] = T2;
+  return { X, T1, T2, C, arc, k };
+}
+// Cắt / kéo dài nét mở P (đoạn gần chạm thứ i) tới tiếp điểm T, giữ phía có điểm chạm w. Trả về { pts, atEnd } (atEnd: T ở cuối nét)
+export function trimToPoint(P, i, T, X, w) {
+  const a = P[i], b = P[i + 1], u = [b[0] - a[0], b[1] - a[1]], l2 = u[0] * u[0] + u[1] * u[1] || 1;
+  const sT = ((X[0] - a[0]) * u[0] + (X[1] - a[1]) * u[1]) / l2, sW = ((w[0] - a[0]) * u[0] + (w[1] - a[1]) * u[1]) / l2;
+  if (sW <= sT) return { pts: P.slice(0, i + 1).map((q) => [q[0], q[1]]).concat([T.slice()]), atEnd: true }; // giữ phần đầu nét, T thành điểm cuối
+  return { pts: [T.slice()].concat(P.slice(i + 1).map((q) => [q[0], q[1]])), atEnd: false };
 }
