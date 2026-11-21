@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>QuickPlan</title>
+<meta name="description" content="QuickPlan – phác thảo quy hoạch từ nét vẽ tay thành bản vẽ chính xác.">
+<meta name="theme-color" content="#16325c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="QuickPlan">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<link rel="icon" href="img/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- Màn hình khởi động -->
+<div id="splash">
+  <img src="img/splash.jpg" alt="QuickPlan">
+  <div class="splash-meta">
+    <div class="ver">Phiên bản <span data-version></span></div>
+    <div class="by">Thiết kế: <span data-designer></span></div>
+  </div>
+</div>
+
+<!-- Danh sách bản vẽ -->
+<section id="home" class="screen">
+  <header class="home-head">
+    <img src="img/icon-192.png" alt="" class="home-logo">
+    <div>
+      <h1>QuickPlan</h1>
+      <p class="muted">From Rough Stroke to Precise Plan in Real-Time</p>
+    </div>
+    <div class="spacer"></div>
+    <span class="sync-pill" data-sync></span>
+  </header>
+  <div class="home-actions">
+    <button class="btn primary" id="btnNew">＋ Bản vẽ mới</button>
+    <button class="btn" id="btnDemo">Mở bản vẽ mẫu</button>
+  </div>
+  <div id="drawingList" class="drawing-list"></div>
+  <div id="installHint" class="hint" hidden></div>
+  <footer class="home-foot">QuickPlan phiên bản <span data-version></span> · Thiết kế: <span data-designer></span></footer>
+</section>
+
+<!-- Kết nối máy tính (bản web) -->
+<dialog id="pcDlg" class="pc-dlg">
+  <form method="dialog">
+    <h3>Kết nối máy tính</h3>
+    <p class="muted">Bản vẽ luôn được lưu trên iPad. Khi kết nối được máy tính đang chạy QuickPlan.exe (cùng Wi-Fi), bản vẽ và file xuất sẽ tự lưu song song về thư mục <b>QuickPlan-DuLieu</b> trên máy tính.</p>
+    <label>Địa chỉ máy tính (xem trong cửa sổ đen của QuickPlan.exe, dòng “Địa chỉ cho bản web”)
+      <input id="pcAddr" placeholder="ví dụ 192.168.1.5" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url">
+    </label>
+    <div id="pcMsg" class="pc-msg"></div>
+    <div class="pc-btns">
+      <button type="button" class="btn" id="pcOff">Ngắt kết nối</button>
+      <span class="spacer"></span>
+      <button value="close" class="btn">Đóng</button>
+      <button type="button" class="btn primary" id="pcTry">Kết nối</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Màn hình vẽ -->
+<section id="editor" class="screen" hidden>
+  <header class="topbar">
+    <button class="ibtn" id="btnHome" title="Danh sách bản vẽ" aria-label="Danh sách bản vẽ">
+      <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <input id="docName" class="doc-name" aria-label="Tên bản vẽ">
+    <span class="sync-pill" data-sync></span>
+    <div class="spacer"></div>
+    <div class="zoomctl">
+      <button class="ibtn" id="zoomNorth" hidden title="Bản vẽ đang xoay – chạm để đưa hướng Bắc lên trên" aria-label="Hướng Bắc lên trên"><svg viewBox="0 0 24 24" style="transition:transform .15s"><path d="M12 3l4 9h-8z" fill="#dc2626" stroke="#dc2626"/><path d="M12 21l-4-9h8z"/><text x="12" y="11" font-size="0" /></svg></button>
+      <button class="ibtn" id="zoomIn" title="Phóng to" aria-label="Phóng to"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M10.5 7.5v6M7.5 10.5h6"/></svg></button>
+      <button class="ibtn" id="zoomOut" title="Thu nhỏ" aria-label="Thu nhỏ"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></svg></button>
+      <button class="ibtn" id="zoomFit" title="Toàn cảnh: thấy hết khu vực đang vẽ" aria-label="Toàn cảnh"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><rect x="8.5" y="8.5" width="7" height="7" rx="1"/></svg></button>
+    </div>
+    <div class="seg" role="tablist">
+      <button id="btn2d" class="on">2D</button>
+      <button id="btn3d">3D</button>
+    </div>
+    <button class="ibtn" id="btnUndo" title="Hoàn tác (chạm 2 ngón)" aria-label="Hoàn tác"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
+    <button class="ibtn" id="btnRedo" title="Làm lại (chạm 3 ngón)" aria-label="Làm lại"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
+    <button class="ibtn" id="btnLayers" title="Lớp" aria-label="Lớp"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
+    <button class="ibtn" id="btnImport" title="Nền bản đồ / Nhập CAD" aria-label="Nền bản đồ"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></button>
+    <button class="ibtn" id="btnExport" title="Xuất file" aria-label="Xuất file"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg></button>
+    <button class="ibtn" id="btnSettings" title="Cài đặt" aria-label="Cài đặt"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+  </header>
+
+  <nav class="toolbar" id="toolbar" aria-label="Công cụ"></nav>
+  <div class="toolopts" id="toolOpts"></div>
+
+  <div class="stage" id="stage">
+    <canvas id="c2d"></canvas>
+    <div id="v3d" class="v3d" hidden></div>
+  </div>
+
+  <div class="bar3d" id="bar3d" hidden>
+    <div class="seg" id="renderModes">
+      <button data-mode="solid" class="on">Khối đặc</button>
+      <button data-mode="iso">Đường sinh</button>
+      <button data-mode="wire">Chỉ nét</button>
+      <button data-mode="xray">X-Ray</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="sunOn" checked> Bóng đổ</label>
+    <label class="chk"><input type="checkbox" id="bldByUse"> Công trình tô màu theo chức năng</label>
+    <div class="seg" id="sunModeSeg">
+      <button data-m="auto" class="on">Theo giờ, ngày</button>
+      <button data-m="manual">Chọn hướng nắng</button>
+    </div>
+    <div id="sunAuto" class="sunwrap">
+      <div class="sunrow">
+        <span id="sunTime">9:00</span>
+        <input type="range" id="sunSlider" min="6" max="18" step="0.25" value="9">
+      </div>
+      <div class="seg" id="sunDates">
+        <button data-doy="80">Xuân phân</button>
+        <button data-doy="172" class="on">Hạ chí 21/6</button>
+        <button data-doy="355">Đông chí 21/12</button>
+      </div>
+      <input type="date" id="sunDate" aria-label="Chọn ngày">
+    </div>
+    <div id="sunMan" class="sunwrap" hidden>
+      <div class="sunrow"><span style="width:auto">Hướng</span><input type="range" id="sunAz" min="0" max="359" step="5" value="135"><b id="sunAzV" style="min-width:120px">135° (Đông Nam)</b></div>
+      <div class="sunrow"><span style="width:auto">Độ cao</span><input type="range" id="sunEl" min="5" max="85" step="1" value="45"><b id="sunElV" style="min-width:40px">45°</b></div>
+    </div>
+    <button class="btn sm" id="btnFrame">Toàn cảnh</button>
+    <button class="btn sm" id="btnTerrain">⛰ Địa hình</button>
+    <button class="btn sm primary" id="btnRender">📷 Xuất ảnh 3D</button>
+  </div>
+
+  <aside class="hud" id="hud"></aside>
+  <aside class="props" id="props" hidden></aside>
+  <div class="pop" id="pop" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+</section>
+
+<input type="file" id="fileBase" accept="image/*" hidden>
+<input type="file" id="fileCad" accept=".dxf,.geojson,.json,application/json" hidden>
+
+<script>
+// Bộ nhớ đệm cũ (bản trước) còn điều khiển trang: chờ bản mới cài xong rồi tải lại một lần
+(function () {
+  var V = 'quickplan-v0.23.0';
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller || !window.caches) return;
+  caches.has(V).then(function (ok) {
+    if (ok) return;
+    try { if (sessionStorage.getItem('qpUpd') === V) return; sessionStorage.setItem('qpUpd', V); } catch (e) {}
+    navigator.serviceWorker.addEventListener('controllerchange', function () { location.reload(); });
+    navigator.serviceWorker.register('sw.js').then(function (r) { r.update(); });
+  });
+})();
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
