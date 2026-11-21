@@ -11,14 +11,20 @@ export const pc = {
   set addr(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch {} },
 };
 
-// "192.168.1.5" -> "https://192.168.1.5:8443"; giữ nguyên nếu đã ghi đủ
+// "192.168.1.5" -> "https://192.168.1.5:8080"; giữ nguyên nếu đã ghi đủ cổng
 export function normAddr(s) {
   s = String(s || '').trim().replace(/\/+$/, '');
   if (!s) return '';
   if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
   const u = new URL(s);
-  if (!u.port) u.port = u.protocol === 'https:' ? '8443' : '8080';
-  return u.origin;
+  if (!u.port && u.protocol === 'http:') u.port = '8080';
+  return u.port ? u.origin : u.origin + ':8080'; // QuickPlan.exe nhận cả https trên cổng 8080
+}
+// Các địa chỉ thử lần lượt: cổng 8080 (http+https chung) rồi 8443
+function candidates(input) {
+  const b = normAddr(input);
+  if (/^https:\/\/[^/]+$/.test(b) && !/:\d+$/.test(String(input).trim().replace(/\/+$/, ''))) return [b, b.replace(/:8080$/, ':8443')];
+  return [b];
 }
 
 // Gốc địa chỉ API: '' (cùng máy chủ) hoặc 'https://IP:cổng'; null nếu bản web chưa cài máy tính
@@ -45,14 +51,17 @@ export async function ping(base = apiBase()) {
 
 // Thử kết nối tới địa chỉ người dùng nhập; trả về thông tin máy tính hoặc ném lỗi dễ hiểu
 export async function connect(input) {
-  const base = normAddr(input);
-  let r;
-  try { r = await fetch(base + '/api/info', { cache: 'no-store', mode: 'cors', signal: timeout(5000) }); }
-  catch { throw new Error('Không kết nối được ' + base + '. Kiểm tra: QuickPlan.exe đang chạy, iPad và máy tính cùng Wi-Fi, đã cài chứng chỉ QuickPlan trên iPad.'); }
-  if (!r.ok) throw new Error('Máy tính trả lời lỗi ' + r.status);
-  const info = await r.json();
-  pc.addr = base; pc.ok = true;
-  return info;
+  const list = candidates(input);
+  for (const base of list) {
+    let r;
+    try { r = await fetch(base + '/api/info', { cache: 'no-store', mode: 'cors', signal: timeout(5000) }); }
+    catch { continue; }
+    if (!r.ok) continue;
+    const info = await r.json();
+    pc.addr = base; pc.ok = true;
+    return info;
+  }
+  throw new Error('Không kết nối được ' + list[0].replace('https://', '') + '. Kiểm tra: QuickPlan.exe bản 0.23.0 trở lên đang chạy, iPad và máy tính cùng Wi-Fi, đã cài chứng chỉ QuickPlan trên iPad.');
 }
 
 const DIRECT = {

@@ -2,7 +2,7 @@
 import * as G from './geom.js';
 import { LU_PLANS, LU_TABLES } from './landuse-tables.js';
 
-export const APP_VERSION = '0.23.0';
+export const APP_VERSION = '0.23.1';
 export const DESIGNER = 'Phan Trọng Tuệ';
 
 // Danh mục chức năng sử dụng đất: theo loại hình quy hoạch (QHC 1/10.000, QHC 1/5.000, QHPK 1/2.000, QHCT)

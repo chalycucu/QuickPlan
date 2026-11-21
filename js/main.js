@@ -142,7 +142,7 @@ function renderSync() {
 if (PC.HOSTED) {
   const dlg = $('#pcDlg'), inp = $('#pcAddr'), msg = $('#pcMsg');
   const say = (t, cls = '') => { msg.textContent = t; msg.className = 'pc-msg ' + cls; };
-  const short = (a) => a.replace('https://', '').replace(/:8443$/, '');
+  const short = (a) => a.replace('https://', '').replace(/:8080$/, '');
   $$('[data-sync]').forEach((e) => {
     e.setAttribute('role', 'button'); e.tabIndex = 0; e.title = 'Kết nối máy tính để lưu song song bản vẽ về PC';
     e.onclick = () => {
