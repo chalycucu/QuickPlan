@@ -1577,9 +1577,10 @@ function panelState(el, st) {
   if (dm.w) el.style.width = dm.w + 'px'; else el.style.width = '';
   if (dm.h) { el.style.height = dm.h + 'px'; } else el.style.height = '';
   placeRz(el);
-  if (st.x != null && el.offsetParent && el.dataset.pkey !== 'opts') {
+  const ps = el.dataset.pkey === 'opts' ? dm : st; // QP-22: bảng tuỳ chọn cũng di chuyển được (nhớ chỗ riêng cho iPad dọc / ngang)
+  if (ps.x != null && el.offsetParent) {
     const pr = el.offsetParent.getBoundingClientRect();
-    el.style.left = Math.max(0, Math.min(pr.width - 60, st.x)) + 'px'; el.style.top = Math.max(0, Math.min(pr.height - 40, st.y)) + 'px';
+    el.style.left = Math.max(0, Math.min(pr.width - 60, ps.x)) + 'px'; el.style.top = Math.max(0, Math.min(pr.height - 40, ps.y)) + 'px';
     el.style.right = 'auto'; el.style.bottom = 'auto';
     if (el.id === 'props' || el.id === 'pop') el.style.maxHeight = st.h ? 'none' : Math.max(160, pr.height - parseFloat(el.style.top) - 10) + 'px';
   } else { el.style.left = el.style.top = el.style.right = el.style.bottom = ''; el.style.maxHeight = dm.h ? 'none' : ''; }
@@ -1623,10 +1624,20 @@ function enableResize(el, key) {
     const r = el.getBoundingClientRect(), m = e.pointerType === 'touch' ? 16 : 12;
     if (e.clientX < r.left - 2 || e.clientX > r.right + 2 || e.clientY < r.top || e.clientY > r.bottom + 2) return '';
     const L = e.clientX - r.left < m, R = r.right - e.clientX < m, B = r.bottom - e.clientY < m;
-    if (key === 'opts' && portrait()) return B && L ? 'sw' : L ? 'w' : B ? 's' : ''; // bảng tuỳ chọn bám mép phải: chỉ giãn cạnh trái / dưới
+    if (key === 'opts' && portrait() && (PANEL.opts || {}).x == null) return B && L ? 'sw' : L ? 'w' : B ? 's' : ''; // bảng tuỳ chọn bám mép phải: chỉ giãn cạnh trái / dưới
     return B && R ? 'se' : B && L ? 'sw' : R ? 'e' : L ? 'w' : B ? 's' : '';
   };
   let rz = null;
+  // QP-22 (iPad): Safari coi chạm bút / ngón tay là cuộn trang nên cắt ngang thao tác kéo. Chạm ở cạnh hộp (co kéo) hoặc bút chạm chỗ trống (di chuyển): chặn cuộn
+  if (!el.dataset.rzTouch) {
+    el.dataset.rzTouch = '1';
+    el.addEventListener('touchstart', (e) => {
+      const t = e.changedTouches[0]; if (!t || e.touches.length > 1) return;
+      const pen = t.touchType === 'stylus';
+      if (zoneAt({ clientX: t.clientX, clientY: t.clientY, pointerType: pen ? 'pen' : 'touch' })) { if (e.cancelable) e.preventDefault(); return; }
+      if (pen && !el.classList.contains('collapsed') && !(e.target.closest && e.target.closest(PNL_CTRL)) && (e.target === el || (e.target.closest && e.target.closest('.pnl') === el)) && e.cancelable) e.preventDefault();
+    }, { passive: false });
+  }
   el.addEventListener('pointermove', (e) => {
     if (rz) return;
     const z = zoneAt(e); if ((el.dataset.rz || '') !== z) { if (z) el.dataset.rz = z; else delete el.dataset.rz; }
@@ -1643,8 +1654,9 @@ function enableResize(el, key) {
   const start = (e, z) => {
     e.preventDefault(); e.stopPropagation();
     const st = PANEL[key] || (PANEL[key] = {}), r = el.getBoundingClientRect(), pr = el.offsetParent.getBoundingClientRect();
-    if (key !== 'opts' && st.x == null) { st.x = Math.round(r.left - pr.left); st.y = Math.round(r.top - pr.top); }
-    rz = { z, x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, l0: st.x, st };
+    const P = key === 'opts' ? dimsOf(st, key) : st;
+    if (P.x == null && !(key === 'opts' && portrait())) { P.x = Math.round(r.left - pr.left); P.y = Math.round(r.top - pr.top); }
+    rz = { z, x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, l0: P.x, st, P };
     el.dataset.rz = z; try { el.setPointerCapture(e.pointerId); } catch {}
   };
   el.addEventListener('pointerdown', (e) => {
@@ -1658,8 +1670,7 @@ function enableResize(el, key) {
       try { el.setPointerCapture(e.pointerId); } catch {}
       return;
     }
-    if (e.pointerType === 'touch') return;
-    const z = zoneAt(e); if (!z || e.button > 0) return;
+    const z = zoneAt(e); if (!z || e.button > 0) return; // QP-22: iPad co kéo ở cạnh hộp như trên Windows (bút, ngón tay, chuột)
     start(e, z);
   }, true);
   el.addEventListener('pointermove', (e) => {
@@ -1671,7 +1682,7 @@ function enableResize(el, key) {
     if (!rz) return;
     const dx = e.clientX - rz.x0, dy = e.clientY - rz.y0, st = rz.st, dm = dimsOf(st, key);
     if (rz.z.includes('e')) dm.w = Math.max(220, Math.round(rz.w0 + dx));
-    if (rz.z.includes('w')) { dm.w = Math.max(220, Math.round(rz.w0 - dx)); if (key !== 'opts') st.x = Math.round(rz.l0 + rz.w0 - dm.w); }
+    if (rz.z.includes('w')) { dm.w = Math.max(220, Math.round(rz.w0 - dx)); if (rz.P.x != null) rz.P.x = Math.round(rz.l0 + rz.w0 - dm.w); }
     if (rz.z.includes('s')) dm.h = Math.max(120, Math.round(rz.h0 + dy));
     panelState(el, st); rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : rz.z);
     e.stopPropagation();
@@ -1682,11 +1693,11 @@ function enableResize(el, key) {
     if (!rz) return; rz = null; savePanels(); delete el.dataset.rz; rzTip(0, 0, ''); e.stopPropagation(); };
   el.addEventListener('pointerup', end, true); el.addEventListener('pointercancel', end, true);
 }
+const PNL_CTRL = 'button, input, select, textarea, a, label, .seg, [contenteditable], canvas, video, .chip, .lu-row, .lu-pal, .chk-row, [role=button], [onclick], .rzh';
 function panelChrome(el, key, title, host = null) {
   const st = PANEL[key] || (PANEL[key] = {});
   el.classList.add('pnl'); el.dataset.title = title;
   el.querySelectorAll('.pgrip, .pmin').forEach((n) => n.remove());
-  if (key === 'opts') { delete st.x; delete st.y; } // bảng tuỳ chọn công cụ luôn ở bên phải
   enableResize(el, key);
   const grip = h('<button class="pgrip" title="Kéo để di chuyển · chạm đúp: về chỗ cũ" aria-label="Di chuyển bảng"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>');
   const min = h('<button class="pmin" aria-label="Thu gọn">▾</button>');
@@ -1699,7 +1710,7 @@ function panelChrome(el, key, title, host = null) {
   // kéo bằng nút ⠿ hoặc bằng cả thanh tiêu đề (trừ các nút trên thanh)
   const bind = (hd, isGrip, rowOnly = false) => {
     hd.addEventListener('pointerdown', (e) => {
-      if (!isGrip && (e.target.closest('button, input, select, textarea, a, label, .seg, [contenteditable], canvas, video, .chip, .lu-row, .lu-pal, .chk-row, [role=button], [onclick]') || e.button > 0)) return;
+      if (!isGrip && (e.target.closest(PNL_CTRL) || e.button > 0)) return;
       // bút / chuột: kéo được từ bất kỳ chỗ trống nào của hộp thoại; ngón tay: chỉ dải trên cùng (để ngón tay còn cuộn nội dung)
       const anywhere = rowOnly && (e.pointerType === 'pen' || e.pointerType === 'mouse');
       if (rowOnly === 'body' && !anywhere) return;
@@ -1718,8 +1729,8 @@ function panelChrome(el, key, title, host = null) {
     });
     hd.addEventListener('pointermove', (e) => {
       if (!o || o.hd !== hd || Math.hypot(e.clientX - o.sx, e.clientY - o.sy) < 3) return;
-      const cs = PANEL[el.dataset.pkey] || st;
-      cs.x = Math.round(e.clientX - o.pr.left - o.dx); cs.y = Math.round(e.clientY - o.pr.top - o.dy); panelState(el, cs);
+      const cs = PANEL[el.dataset.pkey] || st, P = el.dataset.pkey === 'opts' ? dimsOf(cs, 'opts') : cs;
+      P.x = Math.round(e.clientX - o.pr.left - o.dx); P.y = Math.round(e.clientY - o.pr.top - o.dy); panelState(el, cs);
     });
     const end = () => { if (o && o.hd === hd) { o = null; savePanels(); } };
     hd.addEventListener('pointerup', end); hd.addEventListener('pointercancel', end);
@@ -1728,6 +1739,7 @@ function panelChrome(el, key, title, host = null) {
   if (host && !host.dataset.dragBound) { host.dataset.dragBound = '1'; host.style.touchAction = 'none'; host.style.cursor = 'grab'; bind(host, false); }
   if (host && !el.dataset.bodyDrag) { el.dataset.bodyDrag = '1'; bind(el, false, 'body'); } // bút chạm chỗ trống trong thân hộp thoại cũng kéo được
   // bảng không có thanh tiêu đề riêng (thanh tuỳ chọn công cụ, thanh Hiển thị 3D): chạm chỗ trống trên cả dải trên cùng để kéo
+  if (key === 'opts' && !el.dataset.bodyDrag) { el.dataset.bodyDrag = '1'; bind(el, false, 'body'); } // QP-22: bút chạm chỗ trống của bảng tuỳ chọn để di chuyển
   if (!host && key !== 'opts' && !el.dataset.rowDrag) { el.dataset.rowDrag = '1'; el.classList.add('pnl-rowdrag'); bind(el, false, true); }
   panelState(el, st);
 }
@@ -4390,7 +4402,7 @@ $('#btnLayers').onclick = () => openLayers();
 function openLayers() {
   const keepScroll = $('#pop').hidden ? 0 : $('#pop').scrollTop;
   setTimeout(() => { $('#pop').scrollTop = keepScroll; }, 0);
-  openPop('<div><h3>Quản lý lớp</h3><div class="layer-head"><span>Hiện</span><span>Lớp (trên cùng che lớp dưới)</span><span>Khoá</span><span>Độ rõ</span></div><div id="layerRows"></div><button class="btn" id="lyAdd" style="width:100%;margin-top:8px">＋ Tạo lớp mới</button><h4>Nhãn ô đất hiển thị</h4><div id="zlRows" class="chips"></div><div class="note">Dùng <b>▲ ▼</b> để đổi thứ tự lớp: lớp ở trên che lớp ở dưới. Lớp bị khoá (🔒) vẫn hiển thị và chọn xem được, nhưng không thể xoá, sửa hay di chuyển đối tượng. Lớp tự tạo: bấm <b>✎</b> để đổi tên, <b>Vẽ vào</b> để các nét vẽ mới vào lớp đó; muốn đưa đối tượng có sẵn vào lớp, chọn đối tượng rồi chọn lớp trong bảng thuộc tính.</div></div>', (pop) => {
+  openPop('<div><h3>Quản lý lớp</h3><div class="layer-head"><span>Hiện</span><span>Lớp (trên cùng che lớp dưới)</span><span>Khoá</span><span>Độ rõ</span></div><div id="layerRows"></div><button class="btn" id="lyAdd" style="width:100%;margin-top:8px">＋ Tạo lớp mới</button><h4>Xuất / nhập theo lớp</h4><div class="note">Xuất riêng từng lớp thành một file (đầu tên file: <b>dg</b> đường, <b>sdđ</b> sử dụng đất, <b>cq</b> cảnh quan, <b>ct</b> công trình, <b>pt</b> phân tích). Nhập: file của lớp nào vào đúng lớp đó; lớp tự tạo vào lớp cùng tên, chưa có thì tạo lớp mới.</div><div id="lyExp"></div><div class="seg" id="lyMode" style="width:100%;margin-top:8px"><button data-m="add" style="flex:1">＋ Thêm vào lớp</button><button data-m="replace" style="flex:1">⟲ Xoá và thay lớp cũ</button></div><button class="btn primary" id="lyImp" style="width:100%;margin-top:8px">⤒ Nhập lớp từ file…</button><h4>Nhãn ô đất hiển thị</h4><div id="zlRows" class="chips"></div><div class="note">Dùng <b>▲ ▼</b> để đổi thứ tự lớp: lớp ở trên che lớp ở dưới. Lớp bị khoá (🔒) vẫn hiển thị và chọn xem được, nhưng không thể xoá, sửa hay di chuyển đối tượng. Lớp tự tạo: bấm <b>✎</b> để đổi tên, <b>Vẽ vào</b> để các nét vẽ mới vào lớp đó; muốn đưa đối tượng có sẵn vào lớp, chọn đối tượng rồi chọn lớp trong bảng thuộc tính.</div></div>', (pop) => {
     M.upgradeDoc(S.doc);
     const box = pop.querySelector('#layerRows');
     const order = M.layerOrder(S.doc);
@@ -4427,6 +4439,10 @@ function openLayers() {
         box.append(sub);
       }
     });
+    pop.querySelector('#lyExp').innerHTML = layerExportChips(); bindLayerExport(pop);
+    const syncMode = () => pop.querySelectorAll('#lyMode button').forEach((b) => b.classList.toggle('on', b.dataset.m === layerImportMode));
+    pop.querySelectorAll('#lyMode button').forEach((b) => (b.onclick = () => { layerImportMode = b.dataset.m; syncMode(); })); syncMode();
+    pop.querySelector('#lyImp').onclick = () => pickLayerFiles();
     pop.querySelector('#lyAdd').onclick = () => {
       const nm = prompt('Tên lớp mới', 'Lớp ' + (S.doc.layers.filter((l) => l.id >= 100).length + 1));
       if (!nm || !nm.trim()) return;
@@ -4886,10 +4902,13 @@ $('#btnExport').onclick = () => openPop(`<div><h3>Xuất file</h3>
     <button class="btn" data-x="usdz">USDZ<small>Xem AR trên iPad</small></button>
     <button class="btn" data-x="png3d">PNG 3D<small>Ảnh phối cảnh</small></button>
   </div>
+  <h4>Riêng từng lớp (nhập lại được qua Quản lý lớp)</h4>
+  ${layerExportChips()}
   <div class="note">“Gửi về PC” lưu vào thư mục <b>QuickPlan-DuLieu/XuatFile</b> trên máy tính.</div>
   </div>`, (pop) => {
   pop.querySelectorAll('#exTarget button').forEach((b) => (b.onclick = () => { exportTarget = b.dataset.t; pop.querySelectorAll('#exTarget button').forEach((x) => x.classList.toggle('on', x === b)); }));
   pop.querySelectorAll('[data-x]').forEach((b) => (b.onclick = () => doExport(b.dataset.x)));
+  bindLayerExport(pop);
 });
 
 async function doExport(kind) {
@@ -4912,13 +4931,96 @@ async function doExport(kind) {
         if (S.mode === '3d') build3D();
       }
     }
-    odQueueExport(name, blob);
-    if (exportTarget === 'pc') {
-      try { const r = await Store.sendExportToPC(name, blob); toast('Đã lưu về PC: ' + r.path); return; }
-      catch { toast('Không kết nối được PC, đang lưu trên thiết bị…'); }
-    }
-    X.download(name, blob);
+    await deliverExport(name, blob);
   } catch (err) { console.error(err); toast('Xuất file lỗi: ' + err.message); }
+}
+async function deliverExport(name, blob) {
+  odQueueExport(name, blob);
+  if (exportTarget === 'pc') {
+    try { const r = await Store.sendExportToPC(name, blob); toast('Đã lưu về PC: ' + r.path); return; }
+    catch { toast('Không kết nối được PC, đang lưu trên thiết bị…'); }
+  }
+  X.download(name, blob);
+}
+
+// ---------------- QP-22: xuất / nhập riêng từng lớp ----------------
+// ký hiệu đầu tên file theo lớp: dg (đường), sdđ (sử dụng đất), cq (cảnh quan), ct (công trình), pt (phân tích)
+const LAYER_PREFIX = { 2: 'dg', 3: 'sdđ', 7: 'cq', 6: 'ct', 4: 'pt', 0: 'cad', 5: 'nhap', 9: 'ctht' };
+const layerPrefix = (id) => (id >= 100 ? 'lop' : LAYER_PREFIX[id] || 'lop');
+const layerItems = (doc, id) => doc.items.filter((i) => M.layerOf(i) === id);
+const exportableLayers = () => M.layerOrder(S.doc).slice().reverse().filter((id) => id !== M.BASE_LAYER && layerItems(S.doc, id).length);
+const safeName = (t) => String(t || '').replace(/[^\p{L}\p{N}_ -]+/gu, '').trim().replace(/\s+/g, '_');
+async function exportLayer(id) {
+  const items = layerItems(S.doc, id);
+  if (!items.length) return toast('Lớp này chưa có đối tượng');
+  const st = S.doc.settings, nm = M.layerName(S.doc, id), base = safeName(S.doc.name) || 'QuickPlan';
+  const L = S.doc.layers.find((l) => l.id === id) || {};
+  const data = { app: 'QuickPlan', type: 'layer', version: M.APP_VERSION, layer: { id, name: nm, prefix: layerPrefix(id), custom: id >= 100, cadView: !!L.cadView }, geo: { lat: st.lat, lon: st.lon, vn2000: st.vn2000 || null, georef: !!st.georef }, items: JSON.parse(JSON.stringify(items)) };
+  if (id === 3 && st.landuse) data.landuse = JSON.parse(JSON.stringify(st.landuse)); // mã đất riêng của bản vẽ
+  const name = `${layerPrefix(id)}_${id >= 100 ? safeName(nm) + '_' : ''}${base}.json`;
+  try { await deliverExport(name, new Blob([JSON.stringify(data)], { type: 'application/json' })); } catch (err) { console.error(err); toast('Xuất lớp lỗi: ' + err.message); }
+}
+function layerExportChips() {
+  const ids = exportableLayers();
+  if (!ids.length) return '<div class="muted" style="font-size:13px">Bản vẽ chưa có đối tượng</div>';
+  return `<div class="chips">${ids.map((id) => `<button class="chip" data-lx="${id}">⤓ <b>${esc(layerPrefix(id))}</b> · ${esc(M.layerName(S.doc, id))} (${layerItems(S.doc, id).length})</button>`).join('')}</div>`;
+}
+const bindLayerExport = (pop) => pop.querySelectorAll('[data-lx]').forEach((b) => (b.onclick = () => exportLayer(+b.dataset.lx)));
+let layerImportMode = 'add';
+function pickLayerFiles() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json'; inp.multiple = true;
+  inp.onchange = async () => {
+    const msgs = [];
+    for (const f of inp.files) { try { msgs.push(importLayerData(JSON.parse(await f.text()), layerImportMode)); } catch (err) { console.error(err); msgs.push(`${f.name}: không đọc được (${err.message})`); } }
+    if (msgs.length) toast(msgs.join(' · '), 6000);
+    if (!$('#pop').hidden && $('#pop').querySelector('#layerRows')) openLayers();
+  };
+  inp.click();
+}
+// mode 'add': thêm vào lớp; 'replace': xoá đối tượng cũ của lớp rồi thay bằng dữ liệu nhập
+function importLayerData(data, mode = 'add') {
+  if (!data || data.app !== 'QuickPlan' || data.type !== 'layer' || !Array.isArray(data.items)) throw new Error('không phải file lớp QuickPlan');
+  const doc = S.doc, src = data.layer || {};
+  let target = src.id;
+  if (src.custom || !(target >= 0 && target < 100) || !M.LAYERS.some((l) => l.id === target)) { // lớp tự tạo: vào lớp cùng tên, chưa có thì tạo lớp mới
+    const key = String(src.name || 'Lớp nhập').trim().toLowerCase();
+    const same = doc.layers.find((l) => (l.id >= 100 ? l.name : M.layerName(doc, l.id)).trim().toLowerCase() === key);
+    if (same) target = same.id;
+    else { target = Math.max(99, ...doc.layers.map((l) => l.id)) + 1; doc.layers.push({ id: target, name: String(src.name || 'Lớp nhập').trim(), visible: true, opacity: 1 }); doc.layerOrder = M.layerOrder(doc); }
+  }
+  checkpoint();
+  let removed = 0;
+  if (mode === 'replace') { const n0 = doc.items.length; doc.items = doc.items.filter((i) => M.layerOf(i) !== target); removed = n0 - doc.items.length; }
+  // vị trí: bản vẽ nguồn và bản vẽ đích đều có toạ độ thì dời cho trùng chỗ; bản vẽ đích chưa có toạ độ thì nhận toạ độ của nguồn
+  const g = data.geo || {}, s = doc.settings, srcGeo = g.georef || g.vn2000, dstGeo = s.georef || s.vn2000;
+  let dx = 0, dy = 0;
+  if (srcGeo && !dstGeo && !doc.items.length) { s.lat = g.lat; s.lon = g.lon; if (g.vn2000) s.vn2000 = g.vn2000; s.georef = !!g.georef; }
+  else if (srcGeo && dstGeo) {
+    const p0 = (data.items.find((i) => i.pts && i.pts.length) || {}).pts; const ref = p0 ? [p0[0][0], p0[0][1]] : [0, 0];
+    const q = X.fromLonLat(X.toLonLat(ref, g.lat, g.lon, g.vn2000 || undefined), s.lat, s.lon, s.vn2000);
+    dx = q[0] - ref[0]; dy = q[1] - ref[1]; if (Math.hypot(dx, dy) < 1e-6) dx = dy = 0;
+  }
+  // mã số đối tượng trùng thì đổi, các tham chiếu (mặt khối -> khối, khối trên mái, nhóm, góc giao lộ -> đường) đổi theo
+  const used = new Set(doc.items.map((i) => i.id)), idMap = new Map();
+  const items = JSON.parse(JSON.stringify(data.items));
+  for (const it of items) if (!it.id || used.has(it.id) || idMap.has(it.id)) { const nid = M.uid(); idMap.set(it.id, nid); it.id = nid; } else used.add(it.id);
+  const remap = (o) => { if (Array.isArray(o)) return o.map(remap); if (o && typeof o === 'object') { for (const k of Object.keys(o)) o[k] = remap(o[k]); return o; } return typeof o === 'string' && idMap.has(o) ? idMap.get(o) : o; };
+  for (const it of items) {
+    it.props = remap(it.props || {});
+    it.layer = target >= 100 ? target : target === 9 && (it.kind === 'building' || it.kind === 'facet') ? 9 : M.KIND_LAYER[it.kind] ?? 4;
+    if (dx || dy) {
+      if (it.pts) C.translateItem(it, dx, dy);
+      if (it.kind === 'road' && it.props.pis) it.props.pis = G.translatePts(it.props.pis, dx, dy);
+      if (it.kind === 'road' && it.props.ctrl) it.props.ctrl = G.translatePts(it.props.ctrl, dx, dy);
+    }
+    doc.items.push(it);
+  }
+  if (data.landuse) { s.landuse = { ...(data.landuse || {}), ...(s.landuse || {}) }; M.applyLanduse && M.applyLanduse(doc); }
+  if (target === 0 && data.layer && data.layer.cadView != null && mode === 'replace') { const L = doc.layers.find((l) => l.id === 0); if (L) L.cadView = !!data.layer.cadView; }
+  M.upgradeDoc(doc);
+  changed();
+  const nm = M.layerName(doc, target);
+  return `Lớp ${nm}: ${mode === 'replace' ? `xoá ${removed}, ` : ''}nhập ${items.length} đối tượng`;
 }
 
 // ---------------- 3D ----------------
@@ -5307,4 +5409,4 @@ window.addEventListener('unhandledrejection', (e) => { const r = e && e.reason; 
 
 // Bắt đầu
 showHome();
-window.QP = { S, M, G, changed, snapItems: () => snapItems(), autoLayAt: (w) => autoLayAt(w), render, renderProps: () => renderProps(), fit: fitView, build3D, setTool, openDrawing, setMode, bigDemoDrawing, async openDoc(d) { await Store.putDrawing(d); await openDrawing(d.id); }, get v3() { return v3; }, get drag() { return drag; }, FA, frameFor: (fc) => frameFor(fc), pickFaceAt: (x, y) => pickFaceAt(v3, x, y), faceLocal: (fc, x, y) => faceLocal(v3, fc, x, y) }; // để kiểm thử
+window.QP = { S, M, G, changed, importLayer: (d, m) => importLayerData(d, m), snapItems: () => snapItems(), autoLayAt: (w) => autoLayAt(w), render, renderProps: () => renderProps(), fit: fitView, build3D, setTool, openDrawing, setMode, bigDemoDrawing, async openDoc(d) { await Store.putDrawing(d); await openDrawing(d.id); }, get v3() { return v3; }, get drag() { return drag; }, FA, frameFor: (fc) => frameFor(fc), pickFaceAt: (x, y) => pickFaceAt(v3, x, y), faceLocal: (fc, x, y) => faceLocal(v3, fc, x, y) }; // để kiểm thử

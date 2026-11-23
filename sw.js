@@ -1,5 +1,5 @@
 // Bộ nhớ đệm để QuickPlan chạy khi mất mạng
-const CACHE = 'quickplan-v0.29.0';
+const CACHE = 'quickplan-v0.30.0';
 const FILES = [
   './', 'css/app.css', 'manifest.webmanifest',
   'js/main.js', 'js/geom.js', 'js/model.js', 'js/render2d.js', 'js/store.js', 'js/exporters.js', 'js/fill.js', 'js/demo.js', 'js/shapes.js', 'js/constrain.js', 'js/basemap.js', 'js/view3d.js', 'js/export3d.js', 'js/icons.js', 'js/handwrite.js', 'js/zoneops.js', 'js/hudexport.js', 'js/vn2000.js', 'js/faces.js', 'js/axis.js', 'js/materials.js', 'js/digits-model.js', 'js/terrain.js', 'js/autolayout.js', 'js/roadops.js', 'js/pen.js', 'js/onedrive.js', 'js/landuse-tables.js', 'js/handwrite-text.js', 'js/letters-model.js', 'js/pc.js',
