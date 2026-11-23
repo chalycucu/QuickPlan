@@ -1641,7 +1641,7 @@ function enableResize(el, key) {
   el.addEventListener('pointermove', (e) => {
     if (rz) return;
     const z = zoneAt(e); if ((el.dataset.rz || '') !== z) { if (z) el.dataset.rz = z; else delete el.dataset.rz; }
-    rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : z);
+    rzTip(e.clientX, e.clientY, e.pointerType === 'touch' || hold || (e.target.closest && e.target.closest('.rzh')) ? '' : z); // QP-22: trên tay cầm góc chỉ hiện tay cầm, không hiện thêm biểu tượng co kéo
   });
   el.addEventListener('pointerleave', () => { if (!rz) { delete el.dataset.rz; rzTip(0, 0, ''); } });
   let hold = null;
@@ -1684,7 +1684,7 @@ function enableResize(el, key) {
     if (rz.z.includes('e')) dm.w = Math.max(220, Math.round(rz.w0 + dx));
     if (rz.z.includes('w')) { dm.w = Math.max(220, Math.round(rz.w0 - dx)); if (rz.P.x != null) rz.P.x = Math.round(rz.l0 + rz.w0 - dm.w); }
     if (rz.z.includes('s')) dm.h = Math.max(120, Math.round(rz.h0 + dy));
-    panelState(el, st); rzTip(e.clientX, e.clientY, e.pointerType === 'touch' ? '' : rz.z);
+    panelState(el, st); rzTip(e.clientX, e.clientY, e.pointerType === 'touch' || el.dataset.rzarm ? '' : rz.z);
     e.stopPropagation();
   }, true);
   const end = (e) => {
