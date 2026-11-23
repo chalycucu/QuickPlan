@@ -4402,7 +4402,7 @@ $('#btnLayers').onclick = () => openLayers();
 function openLayers() {
   const keepScroll = $('#pop').hidden ? 0 : $('#pop').scrollTop;
   setTimeout(() => { $('#pop').scrollTop = keepScroll; }, 0);
-  openPop('<div><h3>Quản lý lớp</h3><div class="layer-head"><span>Hiện</span><span>Lớp (trên cùng che lớp dưới)</span><span>Khoá</span><span>Độ rõ</span></div><div id="layerRows"></div><button class="btn" id="lyAdd" style="width:100%;margin-top:8px">＋ Tạo lớp mới</button><h4>Xuất / nhập theo lớp</h4><div class="note">Xuất riêng từng lớp thành một file (đầu tên file: <b>dg</b> đường, <b>sdđ</b> sử dụng đất, <b>cq</b> cảnh quan, <b>ct</b> công trình, <b>pt</b> phân tích). Nhập: file của lớp nào vào đúng lớp đó; lớp tự tạo vào lớp cùng tên, chưa có thì tạo lớp mới.</div><div id="lyExp"></div><div class="seg" id="lyMode" style="width:100%;margin-top:8px"><button data-m="add" style="flex:1">＋ Thêm vào lớp</button><button data-m="replace" style="flex:1">⟲ Xoá và thay lớp cũ</button></div><button class="btn primary" id="lyImp" style="width:100%;margin-top:8px">⤒ Nhập lớp từ file…</button><h4>Nhãn ô đất hiển thị</h4><div id="zlRows" class="chips"></div><div class="note">Dùng <b>▲ ▼</b> để đổi thứ tự lớp: lớp ở trên che lớp ở dưới. Lớp bị khoá (🔒) vẫn hiển thị và chọn xem được, nhưng không thể xoá, sửa hay di chuyển đối tượng. Lớp tự tạo: bấm <b>✎</b> để đổi tên, <b>Vẽ vào</b> để các nét vẽ mới vào lớp đó; muốn đưa đối tượng có sẵn vào lớp, chọn đối tượng rồi chọn lớp trong bảng thuộc tính.</div></div>', (pop) => {
+  openPop('<div><h3>Quản lý lớp</h3><div class="layer-head"><span>Hiện</span><span>Lớp (trên cùng che lớp dưới)</span><span>Khoá</span><span>Độ rõ</span></div><div id="layerRows"></div><button class="btn" id="lyAdd" style="width:100%;margin-top:8px">＋ Tạo lớp mới</button><h4>Xuất / nhập theo lớp</h4><div class="note"><b>Xuất một lớp:</b> bấm nút <b>⤓ Xuất dữ liệu</b> bên dưới rồi chọn lớp, hoặc bấm chuột phải vào tên lớp ở bảng trên (iPad: chạm giữ tên lớp) rồi chọn <b>Xuất lớp</b>. Đầu tên file: <b>dg</b> đường, <b>sdđ</b> sử dụng đất, <b>cq</b> cảnh quan, <b>ct</b> công trình, <b>pt</b> phân tích. <b>Nhập:</b> file của lớp nào vào đúng lớp đó; lớp tự tạo vào lớp cùng tên, chưa có thì tạo lớp mới.</div><div class="seg" id="lyMode" style="width:100%;margin-top:8px"><button data-m="add" style="flex:1">＋ Thêm vào lớp</button><button data-m="replace" style="flex:1">⟲ Xoá và thay lớp cũ</button></div><button class="btn primary" id="lyImp" style="width:100%;margin-top:8px">⤒ Nhập lớp từ file…</button><button class="btn" id="lyExpBtn" style="width:100%;margin-top:8px">⤓ Xuất dữ liệu…</button><h4>Nhãn ô đất hiển thị</h4><div id="zlRows" class="chips"></div><div class="note">Dùng <b>▲ ▼</b> để đổi thứ tự lớp: lớp ở trên che lớp ở dưới. Lớp bị khoá (🔒) vẫn hiển thị và chọn xem được, nhưng không thể xoá, sửa hay di chuyển đối tượng. Lớp tự tạo: bấm <b>✎</b> để đổi tên, <b>Vẽ vào</b> để các nét vẽ mới vào lớp đó; muốn đưa đối tượng có sẵn vào lớp, chọn đối tượng rồi chọn lớp trong bảng thuộc tính.</div></div>', (pop) => {
     M.upgradeDoc(S.doc);
     const box = pop.querySelector('#layerRows');
     const order = M.layerOrder(S.doc);
@@ -4432,6 +4432,13 @@ function openLayers() {
           changed(); openLayers();
         };
       }
+      // QP-22: chuột phải (iPad: chạm giữ) vào lớp -> menu có lệnh xuất lớp
+      row.addEventListener('contextmenu', (e) => { e.preventDefault(); layerMenu(id, e.clientX, e.clientY); });
+      { const nmEl = row.querySelector('.lname'); let t = 0, p0 = null;
+        nmEl.style.webkitTouchCallout = 'none'; nmEl.style.userSelect = 'none';
+        nmEl.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') return; p0 = [e.clientX, e.clientY]; clearTimeout(t); t = setTimeout(() => { p0 = null; layerMenu(id, e.clientX, e.clientY); }, 550); });
+        nmEl.addEventListener('pointermove', (e) => { if (p0 && Math.hypot(e.clientX - p0[0], e.clientY - p0[1]) > 8) { clearTimeout(t); p0 = null; } });
+        for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) nmEl.addEventListener(ev, () => { clearTimeout(t); p0 = null; }); }
       box.append(row);
       if (id === 0 && S.doc.items.some((i) => i.kind === 'cad')) { // nét DXF / CAD: chỉ để nhìn, hay tác động tới vẽ
         const view = !!st.cadView, sub = h(`<div class="layer-sub"><span>Nét DXF / CAD:</span><div class="seg"><button class="${view ? 'on' : ''}" data-cv="1">👁 Chỉ để nhìn</button><button class="${view ? '' : 'on'}" data-cv="0">✎ Tác động khi vẽ</button></div><small class="muted">${view ? 'Không bắt điểm, không chọn được, không làm ranh giới phủ màu SDĐ, cắt, tạo đường theo line' : 'Bắt điểm, làm ranh giới phủ màu SDĐ, giới hạn cắt, tạo đường theo line…'}</small></div>`);
@@ -4439,10 +4446,10 @@ function openLayers() {
         box.append(sub);
       }
     });
-    pop.querySelector('#lyExp').innerHTML = layerExportChips(); bindLayerExport(pop);
     const syncMode = () => pop.querySelectorAll('#lyMode button').forEach((b) => b.classList.toggle('on', b.dataset.m === layerImportMode));
     pop.querySelectorAll('#lyMode button').forEach((b) => (b.onclick = () => { layerImportMode = b.dataset.m; syncMode(); })); syncMode();
     pop.querySelector('#lyImp').onclick = () => pickLayerFiles();
+    pop.querySelector('#lyExpBtn').onclick = (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); layerPickMenu(r.left, r.bottom + 4); };
     pop.querySelector('#lyAdd').onclick = () => {
       const nm = prompt('Tên lớp mới', 'Lớp ' + (S.doc.layers.filter((l) => l.id >= 100).length + 1));
       if (!nm || !nm.trim()) return;
@@ -4902,13 +4909,11 @@ $('#btnExport').onclick = () => openPop(`<div><h3>Xuất file</h3>
     <button class="btn" data-x="usdz">USDZ<small>Xem AR trên iPad</small></button>
     <button class="btn" data-x="png3d">PNG 3D<small>Ảnh phối cảnh</small></button>
   </div>
-  <h4>Riêng từng lớp (nhập lại được qua Quản lý lớp)</h4>
-  ${layerExportChips()}
+  <div class="note">Xuất riêng một lớp: mở <b>Quản lý lớp</b>, bấm <b>⤓ Xuất dữ liệu</b> rồi chọn lớp (hoặc chuột phải / chạm giữ tên lớp).</div>
   <div class="note">“Gửi về PC” lưu vào thư mục <b>QuickPlan-DuLieu/XuatFile</b> trên máy tính.</div>
   </div>`, (pop) => {
   pop.querySelectorAll('#exTarget button').forEach((b) => (b.onclick = () => { exportTarget = b.dataset.t; pop.querySelectorAll('#exTarget button').forEach((x) => x.classList.toggle('on', x === b)); }));
   pop.querySelectorAll('[data-x]').forEach((b) => (b.onclick = () => doExport(b.dataset.x)));
-  bindLayerExport(pop);
 });
 
 async function doExport(kind) {
@@ -4948,7 +4953,6 @@ async function deliverExport(name, blob) {
 const LAYER_PREFIX = { 2: 'dg', 3: 'sdđ', 7: 'cq', 6: 'ct', 4: 'pt', 0: 'cad', 5: 'nhap', 9: 'ctht' };
 const layerPrefix = (id) => (id >= 100 ? 'lop' : LAYER_PREFIX[id] || 'lop');
 const layerItems = (doc, id) => doc.items.filter((i) => M.layerOf(i) === id);
-const exportableLayers = () => M.layerOrder(S.doc).slice().reverse().filter((id) => id !== M.BASE_LAYER && layerItems(S.doc, id).length);
 const safeName = (t) => String(t || '').replace(/[^\p{L}\p{N}_ -]+/gu, '').trim().replace(/\s+/g, '_');
 async function exportLayer(id) {
   const items = layerItems(S.doc, id);
@@ -4960,12 +4964,29 @@ async function exportLayer(id) {
   const name = `${layerPrefix(id)}_${id >= 100 ? safeName(nm) + '_' : ''}${base}.json`;
   try { await deliverExport(name, new Blob([JSON.stringify(data)], { type: 'application/json' })); } catch (err) { console.error(err); toast('Xuất lớp lỗi: ' + err.message); }
 }
-function layerExportChips() {
-  const ids = exportableLayers();
-  if (!ids.length) return '<div class="muted" style="font-size:13px">Bản vẽ chưa có đối tượng</div>';
-  return `<div class="chips">${ids.map((id) => `<button class="chip" data-lx="${id}">⤓ <b>${esc(layerPrefix(id))}</b> · ${esc(M.layerName(S.doc, id))} (${layerItems(S.doc, id).length})</button>`).join('')}</div>`;
+function showMenu(m, x, y) {
+  document.querySelectorAll('.ctxmenu').forEach((o) => o.remove());
+  document.body.append(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x)) + 'px'; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y)) + 'px';
+  const off = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('pointerdown', off, true); } };
+  setTimeout(() => document.addEventListener('pointerdown', off, true), 0);
 }
-const bindLayerExport = (pop) => pop.querySelectorAll('[data-lx]').forEach((b) => (b.onclick = () => exportLayer(+b.dataset.lx)));
+// nút «Xuất dữ liệu» trong Quản lý lớp: chọn lớp cần xuất
+function layerPickMenu(x, y) {
+  const ids = M.layerOrder(S.doc).slice().reverse().filter((id) => id !== M.BASE_LAYER);
+  const m = h(`<div class="ctxmenu cm-list" role="menu"><div class="cm-h">Chọn lớp cần xuất</div>${ids.map((id) => { const n = layerItems(S.doc, id).length; return `<button role="menuitem" data-l="${id}" ${n ? '' : 'disabled'}><b class="cm-pre">${esc(layerPrefix(id))}</b> ${esc(M.layerName(S.doc, id))} <small>${n ? n + ' đối tượng' : 'chưa có đối tượng'}</small></button>`; }).join('')}</div>`);
+  m.querySelectorAll('[data-l]').forEach((b) => (b.onclick = () => { m.remove(); exportLayer(+b.dataset.l); }));
+  showMenu(m, x, y);
+}
+// menu chuột phải / chạm giữ trên một lớp trong Quản lý lớp
+function layerMenu(id, x, y) {
+  const n = layerItems(S.doc, id).length, nm = M.layerName(S.doc, id), can = id !== M.BASE_LAYER && n > 0;
+  const base = safeName(S.doc.name) || 'QuickPlan', fn = `${layerPrefix(id)}_${id >= 100 ? safeName(nm) + '_' : ''}${base}.json`;
+  const m = h(`<div class="ctxmenu" role="menu"><div class="cm-h">${esc(nm)} <small>(${n})</small></div><button role="menuitem" data-a="exp" ${can ? '' : 'disabled'}>⤓ Xuất lớp<small>${can ? esc(fn) : id === M.BASE_LAYER ? 'Ảnh nền không xuất theo lớp' : 'Lớp chưa có đối tượng'}</small></button></div>`);
+  m.querySelector('[data-a=exp]').onclick = () => { m.remove(); exportLayer(id); };
+  showMenu(m, x, y);
+}
 let layerImportMode = 'add';
 function pickLayerFiles() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json'; inp.multiple = true;
