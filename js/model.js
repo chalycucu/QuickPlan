@@ -3,7 +3,7 @@ import * as G from './geom.js';
 import { LU_PLANS, LU_TABLES } from './landuse-tables.js';
 import { junctionCorners } from './roadops.js';
 
-export const APP_VERSION = '0.30.2';
+export const APP_VERSION = '0.31.0';
 export const DESIGNER = 'Phan Trọng Tuệ';
 
 // Danh mục chức năng sử dụng đất: theo loại hình quy hoạch (QHC 1/10.000, QHC 1/5.000, QHPK 1/2.000, QHCT)
@@ -97,7 +97,7 @@ export const EXIST_LAYER = 9; // nhà hiện trạng (tải từ OpenStreetMap h
 export const BASE_LAYER = 8; // lớp riêng của ảnh nền, tách khỏi lớp nét CAD (0)
 export const KIND_LAYER = { water: 7, road: 2, zone: 3, park: 7, land: 7, cover: 7, building: 6, facet: 6, arrow: 4, flow: 4, circle: 4, cloud: 4, icon: 4, sketch: 5, cad: 0, junction: 2 };
 // QP-20: nét DXF / CAD «chỉ để nhìn» (Quản lý lớp, lớp 0): không bắt điểm, không chọn, không làm ranh giới phủ màu, cắt…
-export const cadInert = (doc, it) => it.kind === 'cad' && !!((doc.layers || []).find((l) => l.id === 0) || {}).cadView;
+export const cadInert = (doc, it) => it.kind === 'cad' && !!((doc.layers || []).find((l) => l.id === layerOf(it)) || {}).cadView;
 export const liveItems = (doc) => doc.items.filter((it) => !cadInert(doc, it));
 // lớp người dùng tạo có số hiệu từ 100; đối tượng được gán vào đó giữ it.layer
 export const layerOf = (it) => (it.layer >= 100 || (it.layer === 9 && (it.kind === 'building' || it.kind === 'facet')) ? it.layer : KIND_LAYER[it.kind] ?? 4);

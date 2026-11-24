@@ -24,6 +24,9 @@ export const PEN_OPS = [
   ['chamfer', 'Tạo góc vát', '<path d="M4 20V10l6-6h10"/><path d="M4 4v4M4 4h4" stroke-dasharray="1.5 2"/>'],
   ['join', 'Bán kính cong nối 2 đối tượng', '<path d="M3 20h6a8 8 0 0 0 8-8V3" stroke-dasharray="0"/><path d="M3 20h3M17 3v3" stroke-width="3"/>'],
   ['offset', 'Offset (song song)', '<path d="M4 18L14 6"/><path d="M9 20l10-12" stroke-dasharray="2.5 2"/><path d="M16 15l2.5 1.5M16 15l1.5-2.5"/>'],
+  ['rotate', 'Xoay đối tượng', '<path d="M19 12a7 7 0 1 1-2.05-4.95"/><path d="M19 4v4h-4"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>'],
+  ['copy', 'Copy (sao chép)', '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'],
+  ['polyclose', 'Tạo đa giác kín', '<path d="M4 7l6-3 9 4-2 10-11 2z" fill="currentColor" fill-opacity=".14"/><path d="M10 4l-1 9 8 5M9 13l-5 7" stroke-dasharray="2 2"/>'],
   ['extrude', 'Extrude khối', '<path d="M4 16l8 4 8-4-8-4z" fill="currentColor" fill-opacity=".14"/><path d="M12 12V3M9 6l3-3 3 3M4 16V11M20 16V11"/>'],
 ];
 export const penName = (k) => ([...PEN_SHAPES, ...PEN_OPS].find((x) => x[0] === k) || [k, k])[1];
