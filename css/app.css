@@ -565,3 +565,7 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 .keys-grid input.bad { border-color: #dc2626; background: #fef2f2; }
 #toolOpts.lay-v.pnl > .title { flex: 1 1 calc(100% - 44px); }
 .keys-grid input { min-height: 0; height: 30px; }
+/* QP-24: chẩn đoán 3D */
+.diag3d { position: fixed; left: 50%; top: 80px; transform: translateX(-50%); z-index: 120; width: min(640px, calc(100vw - 24px)); background: #fff; border: 2px solid #dc2626; border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 13px; }
+.diag3d[hidden] { display: none; }
+.diag3d pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; background: #f8fafc; border-radius: 8px; padding: 8px; margin: 6px 0 8px; max-height: 50vh; overflow: auto; }

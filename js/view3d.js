@@ -82,6 +82,7 @@ export class View3D {
   }
 
   resize() {
+    if (window.ResizeObserver && !this._ro) { this._ro = new ResizeObserver(() => { if (this.running) this.resize(); }); this._ro.observe(this.container); }
     const w = this.container.clientWidth, h = this.container.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
@@ -89,6 +90,17 @@ export class View3D {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     this._dirty = true;
   }
+  // QP-24: chẩn đoán khi 3D trống (iPad): kích thước, camera, số lệnh vẽ, WebGL
+  diag() {
+    const gl = this.renderer.getContext(), c = this.renderer.domElement, cam = this.camera.position, t = this.controls.target, inf = this.renderer.info.render;
+    let meshes = 0; this.scene.traverse((o) => { if (o.isMesh || o.isLine || o.isLineSegments) meshes++; });
+    let gpu = ''; try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch {}
+    return { box: [this.container.clientWidth, this.container.clientHeight], canvas: [c.width, c.height], buf: [gl.drawingBufferWidth, gl.drawingBufferHeight], lost: gl.isContextLost(), flagLost: !!this.lost, running: !!this.running,
+      cam: [cam.x, cam.y, cam.z].map((v) => Math.round(v)), target: [t.x, t.y, t.z].map((v) => Math.round(v)), near: +this.camera.near.toFixed(2), far: Math.round(this.camera.far), aspect: +this.camera.aspect.toFixed(3),
+      bounds: this.bounds && [this.bounds.cx, this.bounds.cy, this.bounds.size].map((v) => Math.round(v)), objects: meshes, calls: inf.calls, tris: inf.triangles, gpu, maxTex: gl.getParameter(gl.MAX_TEXTURE_SIZE) };
+  }
+  // camera hỏng (NaN / vô cực) thì nhìn lại toàn cảnh, thay vì chỉ thấy màu nền
+  _camOk() { const p = this.camera.position, t = this.controls.target; return [p.x, p.y, p.z, t.x, t.y, t.z, this.camera.near, this.camera.far, this.camera.aspect].every(Number.isFinite); }
 
   start() {
     if (this.running) return;
@@ -104,6 +116,7 @@ export class View3D {
     const loop = (ts = performance.now()) => {
       if (!this.running) return;
       this.controls.update(); this.fitClip();
+      if (!this._camOk()) { this.bounds = this.bounds && [this.bounds.cx, this.bounds.cy, this.bounds.size].every(Number.isFinite) ? this.bounds : null; this.frame(); this.resize(); if (!Number.isFinite(this.camera.aspect)) { this.camera.aspect = 1; this.camera.updateProjectionMatrix(); } this._dirty = true; this.camFix = (this.camFix || 0) + 1; }
       const c = this.camera, t = this.controls.target, key = c.position.x.toFixed(3) + ',' + c.position.y.toFixed(3) + ',' + c.position.z.toFixed(3) + ',' + t.x.toFixed(3) + ',' + t.z.toFixed(3) + ',' + c.fov;
       if (key !== lastKey) { lastKey = key; this._act = ts; }
       if (!this.lost && (this._dirty || ts - this._act < 1200 || ts - lastDraw > 250)) { this._dirty = false; lastDraw = ts; this.renderer.render(this.scene, this.camera); }
@@ -207,7 +220,11 @@ export class View3D {
     const alerts = (metrics && metrics.alerts) || {};
     const mode = this.mode;
     const vis = (id) => (!real || (id !== 4 && id !== 5)) && lay[id] && lay[id].visible && lay[id].opacity > 0; // ảnh phối cảnh: bỏ sơ đồ phân tích, nét nháp
-    const bb = G.robustBBox(doc.items.map((i) => (i.kind === 'circle' ? null : i.pts))) || { x0: -200, y0: -200, x1: 200, y1: 200 };
+    const okP = (P) => P && P.length && P.every((q) => Number.isFinite(q[0]) && Number.isFinite(q[1]));
+    this.badItems = doc.items.filter((i) => i.pts && i.pts.length && !okP(i.pts)).length;
+    if (this.badItems) doc = { ...doc, items: doc.items.filter((i) => !i.pts || !i.pts.length || okP(i.pts)) }; // đối tượng có toạ độ hỏng: không dựng (tránh 3D trống)
+    let bb = G.robustBBox(doc.items.map((i) => (i.kind === 'circle' ? null : i.pts)));
+    if (!bb || ![bb.x0, bb.y0, bb.x1, bb.y1].every(Number.isFinite)) bb = { x0: -200, y0: -200, x1: 200, y1: 200 };
     const cx = (bb.x0 + bb.x1) / 2, cy = (bb.y0 + bb.y1) / 2;
     const size = Math.max(200, bb.x1 - bb.x0, bb.y1 - bb.y0);
     this.bounds = { cx, cy, size };

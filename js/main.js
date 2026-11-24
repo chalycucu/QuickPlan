@@ -419,6 +419,7 @@ function render(ts) {
     if (S.penXf.base) { const b = S.view.toScreen(S.penXf.base); ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = '#dc2626'; ctx.beginPath(); ctx.arc(b[0], b[1], 7, 0, 7); ctx.moveTo(b[0] - 12, b[1]); ctx.lineTo(b[0] + 12, b[1]); ctx.moveTo(b[0], b[1] - 12); ctx.lineTo(b[0], b[1] + 12); ctx.stroke(); }
     ctx.restore();
   }
+  if (S.penPick) drawPenPick(ctx);
   if (S.measure) drawMeasure(ctx);
   if (S.axisPick) { ctx.save(); ctx.font = '600 14px system-ui'; ctx.fillStyle = '#1d4ed8'; ctx.fillText('Chạm vào một cạnh để căn trục vẽ theo cạnh đó', 100, 90); ctx.restore(); }
   drawScaleBar(ctx, S.view, 100, S.view.h - 22);
@@ -862,6 +863,7 @@ function penSnapFn(sc) {
 }
 function penGeomFor(raw, sc) {
   const k = penShape(); if (!k) return null;
+  if (S.penForce) { const g = S.penForce; S.penForce = null; g.pen = k; return g; } // QP-24: hình dựng từ số liệu gõ vào
   const g = PEN.penGeom(k, raw, sc, { ang: penOn() && S.opts.pen.axis ? axisRad() : null, snap: penSnapFn(sc), minR: S.tool === 'road' ? S.opts.road.minR || 15 : S.tool === 'footpath' ? S.opts.footpath.minR || 3 : 5 });
   if (g) g.pen = k;
   return g;
@@ -971,7 +973,7 @@ function polyCloseIn(a, b) {
   changed(); renderProps();
   toast(`Đã tạo ${keep.length} đa giác kín${gaps ? ` · khép ${gaps} chỗ hở` : ''}${del.size ? ` · xoá ${del.size} nét cũ` : ''}`);
 }
-function penReset() { S.penLim = null; S.penCut = null; S.penJoin = null; S.penOff = null; S.penXf = null; }
+function penReset() { S.penLim = null; S.penCut = null; S.penJoin = null; S.penOff = null; S.penXf = null; S.penPick = null; S.typedMode = false; try { showCmd(); } catch {} }
 // bước đang chờ của lệnh nhiều bước (hiện trên thanh Cọ vẽ)
 function penStep() {
   const op = penOp();
@@ -2646,6 +2648,7 @@ function toolUp(e, p, w, cancelled) {
   const tap = p && d.start ? G.dist(p, d.start) < 6 : false;
   switch (d.kind) {
     case 'stroke': {
+      if (tap && typedOn() && d.pointerId !== -7 && d.startW) { S.stroke = null; S.osnapHint = null; redrawLive(); penPickTap(d.startW, d.sc); break; }
       const st = S.stroke; S.stroke = null;
       const raw = st ? st.pts : [];
       S.osnapHint = null;
@@ -2771,6 +2774,7 @@ canvas.addEventListener('pointermove', (e) => {
     else if (n >= 2) updatePinch();
     return;
   }
+  if (!drag && S.penPick && e.pointerType !== 'touch') { const w = S.view.toWorld(p[0], p[1]), sn = penSnapFn(S.view.scale); S.penPick.cur = sn ? sn(w) : w; requestRender('ov'); return; }
   if (!drag || drag.pointerId !== e.pointerId) return;
   if (pt) { pt.x = p[0]; pt.y = p[1]; }
   if (drag.kind === 'pan') { S.view.panBy(p[0] - drag.last[0], p[1] - drag.last[1]); drag.last = p; requestRender('view'); return; }
@@ -3771,6 +3775,7 @@ function keyMap() { const m = new Map(), K = { ...DEF_KEYS, ...(S.opts.keys || {
 let cmdBuf = '', lastCmd = null;
 function showCmd(msg) {
   let el = $('#cmdline'); if (!el) { el = h('<div id="cmdline" class="cmdline"></div>'); document.body.append(el); }
+  if (!msg && typedOn()) msg = pickPrompt();
   if (!cmdBuf && !msg) { el.hidden = true; return; }
   const m = keyMap(), hit = cmdBuf && m.get(cmdBuf.toUpperCase()), nm = hit && (PEN_CMDS().find((c) => c[0] === hit) || [])[1];
   el.hidden = false; el.innerHTML = `<b>Lệnh:</b> <span class="cb">${esc(cmdBuf)}</span><i class="caret"></i>${msg ? ` <small>${esc(msg)}</small>` : nm ? ` <small>→ ${esc(nm)} · Enter / Space</small>` : cmdBuf && /^[-\d.]+$/.test(cmdBuf) ? ' <small>→ nhập số · Enter</small>' : ''}`;
@@ -3780,12 +3785,14 @@ function runPenCmd(k) {
   if (!penOn()) togglePenBar(true);
   const p = S.opts.pen, active = c[2] === 'op' ? p.op === k : !p.op && p.shape === k;
   if (!active) { const b = document.querySelector(`#penbar [data-pen="${k}"]`); if (b) b.click(); }
-  lastCmd = k; return true;
+  lastCmd = k;
+  if (TYPED_SHAPES[k] && S.mode !== '3d') { S.typedMode = true; S.penPick = null; requestRender('ov'); }
+  return true;
 }
 function cmdNumber(v) { // số gõ khi đang dùng lệnh: góc xoay, bán kính, khoảng offset…
   const p = S.opts.pen, op = penOp();
   const F = { rotate: 'A', fillet: 'R', chamfer: 'V', offset: 'D', join: 'J', extrude: 'H' }[op];
-  if (!F) return false;
+  if (!F || typeof v !== 'number' || !isFinite(v)) return false;
   p[F] = v; saveOpts(); syncPenBar();
   if (op === 'rotate' && S.penXf && S.penXf.base) penRotateBy(-(v * Math.PI) / 180);
   else toast(`${{ A: 'Góc', R: 'Bán kính R', V: 'Khoảng vát', D: 'Khoảng offset', J: 'Bán kính R', H: 'Chiều cao' }[F]} = ${G.fmtNum(v)}${F === 'A' ? '°' : ' m'}`);
@@ -3794,19 +3801,139 @@ function cmdNumber(v) { // số gõ khi đang dùng lệnh: góc xoay, bán kín
 function cmdKey(e) {
   if (!keysOn() || e.ctrlKey || e.metaKey || e.altKey) return false;
   const k = e.key;
-  if (/^[a-zA-Z0-9.]$/.test(k) || (k === '-' && !cmdBuf)) { cmdBuf += k.toUpperCase(); showCmd(); e.preventDefault(); return true; }
+  if (/^[a-zA-Z0-9.]$/.test(k) || (/^[-,@<]$/.test(k) && (typedOn() || (k === '-' && !cmdBuf)))) { cmdBuf += k.toUpperCase(); showCmd(); e.preventDefault(); return true; }
   if (k === 'Backspace' && cmdBuf) { cmdBuf = cmdBuf.slice(0, -1); showCmd(); e.preventDefault(); return true; }
   if (k === 'Escape' && cmdBuf) { cmdBuf = ''; showCmd(); e.preventDefault(); return true; }
+  if (k === 'Escape' && S.penPick) { S.penPick = null; showCmd(); requestRender('ov'); e.preventDefault(); return true; }
   if (k === 'Enter' || k === ' ') {
-    if (!cmdBuf) { if (lastCmd && k === ' ' ) { e.preventDefault(); runPenCmd(lastCmd); return true; } return false; }
+    if (!cmdBuf) {
+      if (S.penPick && S.penPick.k === 'pline') { e.preventDefault(); finishPline(false); return true; }
+      if (lastCmd && k === ' ') { e.preventDefault(); runPenCmd(lastCmd); return true; } return false;
+    }
     e.preventDefault();
     const b = cmdBuf; cmdBuf = '';
+    if (typedOn() && /^@?-?\d*\.?\d+([,<]-?\d*\.?\d+)?$/.test(b)) { penPickNumber(b); showCmd(); return true; }
     if (/^-?\d+(\.\d+)?$/.test(b)) { if (!cmdNumber(parseFloat(b))) toast('Chưa có lệnh nào cần nhập số'); showCmd(); return true; }
+    if (b === 'C' && S.penPick && S.penPick.k === 'pline') { finishPline(true); return true; }
     const cmd = keyMap().get(b);
     if (!cmd) { showCmd(`không có lệnh «${b}»`); setTimeout(() => { if (!cmdBuf) showCmd(); }, 1600); return true; }
     runPenCmd(cmd); showCmd(); return true;
   }
   return false;
+}
+// ---- QP-24: Windows: vẽ bằng lệnh gõ có nhập số liệu (chiều dài, rộng × cao, bán kính…) ----
+var TYPED_SHAPES = { line: 'Đường line', pline: 'Polyline', rect: 'Hình chữ nhật', circle: 'Hình tròn', tri: 'Hình tam giác', ellipse: 'Hình elip', penta: 'Ngũ giác' };
+function typedOn() { return !!S.typedMode && keysOn() && penOn() && !S.opts.pen.op && !!TYPED_SHAPES[S.opts.pen.shape] && S.mode !== '3d'; }
+function pickPrompt() {
+  const k = S.opts.pen.shape, P = S.penPick;
+  if (!P) return k === 'circle' || k === 'penta' ? 'bấm tâm (kéo bút vẫn vẽ tay như cũ)' : 'bấm điểm đầu (kéo bút vẫn vẽ tay như cũ)';
+  switch (k) {
+    case 'line': return 'nhập chiều dài (m) · dài<góc · @dx,dy rồi Enter, hoặc bấm điểm cuối';
+    case 'pline': return `đỉnh ${P.pts.length + 1}: nhập chiều dài · dài<góc · @dx,dy rồi Enter, hoặc bấm điểm · Enter trống: kết thúc · C: khép kín`;
+    case 'rect': case 'tri': case 'ellipse': return 'nhập rộng,cao (m) rồi Enter, hoặc bấm góc đối diện';
+    case 'circle': return 'nhập bán kính R (m) rồi Enter, hoặc bấm điểm trên đường tròn';
+    case 'penta': return 'nhập bán kính (tâm tới đỉnh, m) rồi Enter, hoặc bấm một đỉnh';
+  }
+  return '';
+}
+// điểm tới từ số gõ vào: dài (theo hướng con trỏ), dài<góc (độ, ngược chiều kim đồng hồ từ hướng Đông), @dx,dy (dy dương: lên trên)
+function typedPoint(a, str, cur) {
+  const n = (x) => parseFloat(x);
+  if (str[0] === '@') { const [dx, dy] = str.slice(1).split(',').map(n); return [a[0] + dx, a[1] - (dy || 0)]; }
+  const [d, g] = str.split(/[<,]/).map(n);
+  let ang;
+  if (g != null && isFinite(g)) ang = (-g * Math.PI) / 180;
+  else { const c = cur || [a[0] + 1, a[1]]; ang = G.dist(c, a) > 1e-9 ? Math.atan2(c[1] - a[1], c[0] - a[0]) : 0; }
+  return [a[0] + d * Math.cos(ang), a[1] + d * Math.sin(ang)];
+}
+const ringPts = (c, rx, ry, n, a0 = 0) => Array.from({ length: n }, (_, i) => { const t = a0 + (i / n) * 2 * Math.PI; return [c[0] + rx * Math.cos(t), c[1] + ry * Math.sin(t)]; });
+// hình (theo dạng của penGeom) từ điểm đầu a và điểm b
+function pickGeom(k, a, b) {
+  if (!a || !b || G.dist(a, b) < 1e-6) return null;
+  const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+  switch (k) {
+    case 'line': return { type: 'line', a: a.slice(), b: b.slice() };
+    case 'rect': return x1 - x0 > 1e-6 && y1 - y0 > 1e-6 ? { type: 'poly', pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] } : null;
+    case 'tri': return x1 - x0 > 1e-6 && y1 - y0 > 1e-6 ? { type: 'poly', pts: [[a[0], b[1]], [b[0], b[1]], [(a[0] + b[0]) / 2, a[1]]].map((q) => q.slice()) } : null;
+    case 'ellipse': { const c = [(x0 + x1) / 2, (y0 + y1) / 2], rx = (x1 - x0) / 2, ry = (y1 - y0) / 2; return rx > 1e-6 && ry > 1e-6 ? { type: 'poly', pts: ringPts(c, rx, ry, 72), ellipse: { c, rx, ry, ang: 0 } } : null; }
+    case 'circle': return { type: 'circle', c: a.slice(), r: G.dist(a, b) };
+    case 'penta': { const r = G.dist(a, b); return { type: 'poly', pts: ringPts(a, r, r, 5, Math.atan2(b[1] - a[1], b[0] - a[0])) }; }
+  }
+  return null;
+}
+// dựng nét như khi vẽ tay (đi qua đúng các bước của bút), nhưng hình lấy theo số liệu
+function commitTyped(path, g) {
+  const sc = S.view.scale, os = S.opts.pen.osnap;
+  const fe = (w) => { const q = S.view.toScreen(w), r = canvas.getBoundingClientRect(); return { pointerId: -7, pointerType: 'mouse', button: 0, pressure: 0.5, clientX: r.left + q[0], clientY: r.top + q[1] }; };
+  const dense = []; for (let i = 0; i < path.length - 1; i++) for (let t = 0; t < 8; t++) { const a = path[i], b = path[i + 1]; dense.push([a[0] + ((b[0] - a[0]) * t) / 8, a[1] + ((b[1] - a[1]) * t) / 8]); }
+  dense.push(path[path.length - 1]);
+  S.opts.pen.osnap = false; S.penForce = g;
+  try {
+    const w0 = path[0], wl = path[path.length - 1];
+    toolDown(fe(w0), S.view.toScreen(w0), w0, sc);
+    if (drag && drag.kind === 'stroke') { toolMove(fe(wl), S.view.toScreen(wl), wl, dense.slice(1).map((w) => ({ p: S.view.toScreen(w), w, pressure: 0.5 }))); toolUp(fe(wl), S.view.toScreen(wl), wl, false); }
+    else { drag = null; S.stroke = null; toast('Lớp đang chọn không vẽ được hình này'); }
+  } finally { S.opts.pen.osnap = os; S.penForce = null; }
+  S.penPick = null; showCmd(); requestRender('ov');
+}
+function finishPline(close) {
+  const P = S.penPick; if (!P) return;
+  if (P.pts.length < 2 || (close && P.pts.length < 3)) { toast(close ? 'Cần ít nhất 3 đỉnh để khép kín' : 'Polyline cần ít nhất 2 điểm'); return; }
+  commitTyped(close ? P.pts.concat([P.pts[0]]) : P.pts, close ? { type: 'poly', pts: P.pts.map((q) => q.slice()) } : { type: 'open', pts: P.pts.map((q) => q.slice()) });
+}
+function penPickTap(w, sc) {
+  const k = S.opts.pen.shape, sn = penSnapFn(sc), q = sn ? sn(w) : w.slice();
+  if (!S.penPick) { S.penPick = { k, pts: [q], cur: q }; showCmd(); requestRender('ov'); return; }
+  const a = S.penPick.pts[0];
+  if (k === 'pline') { const P = S.penPick.pts; if (P.length >= 3 && G.dist(q, P[0]) * sc < 10) { finishPline(true); return; } P.push(q); showCmd(); requestRender('ov'); return; }
+  const g = pickGeom(k, a, q); if (!g) return;
+  commitTyped([a, q], g);
+}
+function penPickNumber(str) {
+  const k = S.opts.pen.shape, P = S.penPick;
+  if (!P) { toast(k === 'circle' || k === 'penta' ? 'Bấm tâm trước, rồi nhập số' : 'Bấm điểm đầu trước, rồi nhập số'); return; }
+  const a = P.pts[P.pts.length - 1], cur = P.cur;
+  if (k === 'line' || k === 'pline') {
+    const b = typedPoint(a, str, cur); if (G.dist(a, b) < 1e-6) return;
+    if (k === 'line') commitTyped([a, b], pickGeom('line', a, b)); else { P.pts.push(b); P.cur = b; requestRender('ov'); }
+    return;
+  }
+  const v = str.replace('@', '').split(/[,<]/).map(parseFloat);
+  if (k === 'circle' || k === 'penta') {
+    const r = Math.abs(v[0]); if (!(r > 0)) return;
+    const dir = cur && G.dist(cur, a) > 1e-9 ? Math.atan2(cur[1] - a[1], cur[0] - a[0]) : -Math.PI / 2;
+    const b = [a[0] + r * Math.cos(dir), a[1] + r * Math.sin(dir)];
+    commitTyped([a, b], pickGeom(k, a, b)); return;
+  }
+  const wd = Math.abs(v[0]), ht = Math.abs(v.length > 1 ? v[1] : v[0]); if (!(wd > 0 && ht > 0)) return;
+  const sx = cur && cur[0] < a[0] ? -1 : 1, sy = cur && cur[1] > a[1] ? 1 : -1; // mặc định: sang phải, lên trên
+  const b = [a[0] + sx * wd, a[1] + sy * ht];
+  commitTyped([a, b], pickGeom(k, a, b));
+}
+function drawPenPick(ctx) {
+  const P = S.penPick; if (!P || !typedOn()) return;
+  const k = P.k, T = (q) => S.view.toScreen(q);
+  ctx.save(); ctx.strokeStyle = '#7b3fe4'; ctx.fillStyle = '#7b3fe4'; ctx.lineWidth = 2; ctx.setLineDash([8, 5]);
+  const pts = k === 'pline' ? P.pts.concat(P.cur ? [P.cur] : []) : null;
+  const g = k === 'pline' ? null : pickGeom(k, P.pts[0], P.cur);
+  ctx.beginPath();
+  if (pts) pts.forEach((q, i) => { const s2 = T(q); i ? ctx.lineTo(s2[0], s2[1]) : ctx.moveTo(s2[0], s2[1]); });
+  else if (g && g.type === 'line') { const a = T(g.a), b = T(g.b); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+  else if (g && g.type === 'circle') { const c = T(g.c); ctx.arc(c[0], c[1], g.r * S.view.scale, 0, 7); }
+  else if (g) { g.pts.forEach((q, i) => { const s2 = T(q); i ? ctx.lineTo(s2[0], s2[1]) : ctx.moveTo(s2[0], s2[1]); }); ctx.closePath(); }
+  ctx.stroke(); ctx.setLineDash([]);
+  for (const q of P.pts) { const s2 = T(q); ctx.fillRect(s2[0] - 3, s2[1] - 3, 6, 6); }
+  if (P.cur) { // số đo theo con trỏ
+    const a = P.pts[P.pts.length - 1], c = P.cur, s2 = T(c);
+    let txt = '';
+    if (k === 'line' || k === 'pline') { const d = G.dist(a, c), ang = (-Math.atan2(c[1] - a[1], c[0] - a[0]) * 180) / Math.PI; txt = `${G.fmtNum(Math.round(d * 100) / 100)} m < ${G.fmtNum(Math.round(((ang % 360) + 360) % 360 * 10) / 10)}°`; }
+    else if (k === 'circle' || k === 'penta') txt = `R = ${G.fmtNum(Math.round(G.dist(a, c) * 100) / 100)} m`;
+    else txt = `${G.fmtNum(Math.round(Math.abs(c[0] - a[0]) * 100) / 100)} × ${G.fmtNum(Math.round(Math.abs(c[1] - a[1]) * 100) / 100)} m`;
+    ctx.font = '600 13px system-ui'; const tw = ctx.measureText(txt).width;
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillRect(s2[0] + 12, s2[1] + 8, tw + 12, 22);
+    ctx.fillStyle = '#5b21b6'; ctx.fillText(txt, s2[0] + 18, s2[1] + 24);
+  }
+  ctx.restore();
 }
 window.addEventListener('keydown', (e) => {
   if (!S.doc || $('#editor').hidden || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
@@ -4526,7 +4653,6 @@ function renderHUD() {
       </div>
       ${indic}${alerts}
     </div>`;
-    hud.querySelector('h3').insertAdjacentHTML('afterend', hudTabs()); bindHudTabs(hud);
     $('#hudToggle').onclick = () => { hudMin = !hudMin; renderHUD(); };
     $('#hudBig').onclick = () => { hudBig = true; renderHUD(); };
     return;
@@ -5254,6 +5380,7 @@ $('#btnSettings').onclick = () => {
     <label class="chk"><input type="checkbox" id="sHand" ${S.opts.handNum ? 'checked' : ''}> Chạm ngón tay vào ô số: mở vùng viết tay (Apple Pencil luôn mở vùng viết tay)</label>
     ${keysOn() ? `<h4>Phím tắt (Windows)</h4><div class="note">Gõ chữ tắt rồi bấm <b>Enter</b> hoặc <b>Space</b> (như AutoCAD). Space khi chưa gõ gì: lặp lại lệnh vừa dùng. Đang dùng lệnh, gõ số rồi Enter để nhập góc xoay, bán kính, khoảng offset… Một lệnh có thể có nhiều chữ tắt, cách nhau bằng dấu phẩy.</div><div class="keys-grid" id="sKeys">${PEN_CMDS().map(([k, n]) => `<label><span>${esc(n)}</span><input data-k="${k}" value="${esc(String({ ...DEF_KEYS, ...(S.opts.keys || {}) }[k] || ''))}" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>`).join('')}</div><div class="note" id="sKeyMsg"></div><button class="btn" id="sKeyDef" style="width:100%">↺ Về phím tắt mặc định</button>` : ''}
     <h4>Thông tin</h4>
+    <button class="btn" id="sDiag3d" style="width:100%">🩺 Chẩn đoán 3D (khi phối cảnh trống)</button>
     <div class="note">QuickPlan phiên bản ${M.APP_VERSION}<br>Thiết kế: ${M.DESIGNER}</div>
     <div class="note">Mẹo: chạm 2 ngón = hoàn tác, chạm 3 ngón = làm lại. Trên PC: chuột trái vẽ, chuột phải kéo bản đồ, lăn chuột thu phóng.</div>
   </div>`, (pop) => {
@@ -5261,6 +5388,7 @@ $('#btnSettings').onclick = () => {
     pop.querySelector('#sLon').onchange = (e) => { s.lon = parseFloat(e.target.value) || s.lon; touch(); };
     pop.querySelector('#sGeo').onchange = (e) => { s.georef = e.target.checked; touch(); };
     pop.querySelector('#sHand').onchange = (e) => { S.opts.handNum = e.target.checked; saveOpts(); };
+    pop.querySelector('#sDiag3d').onclick = async () => { closePop(); if (S.mode !== '3d') { await setMode('3d'); setTimeout(() => check3D(true), 1500); } else check3D(true); };
     const kg = pop.querySelector('#sKeys');
     if (kg) {
       const chk = () => { const seen = new Map(), dup = []; kg.querySelectorAll('input').forEach((i) => { i.classList.remove('bad'); for (const a of i.value.toUpperCase().split(/[,\s]+/).filter(Boolean)) { if (seen.has(a)) { dup.push(a); i.classList.add('bad'); seen.get(a).classList.add('bad'); } else seen.set(a, i); } }); pop.querySelector('#sKeyMsg').textContent = dup.length ? 'Chữ tắt bị trùng: ' + [...new Set(dup)].join(', ') + ' (lệnh đứng trước được dùng)' : ''; };
@@ -5437,6 +5565,34 @@ function importLayerData(data, mode = 'add') {
 // ---------------- 3D ----------------
 let v3 = null, v3Timer = 0;
 let sunDoy = 172, sunHour = 9, sunManual = false, sunAz = 135, sunEl = 45;
+// ---- QP-24: chẩn đoán 3D (iPad: phối cảnh trống) ----
+const errLog = [];
+window.addEventListener('error', (e) => { errLog.push(((e.message || e.error || '') + '').slice(0, 160) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '')); if (errLog.length > 8) errLog.shift(); });
+window.addEventListener('unhandledrejection', (e) => { errLog.push('promise: ' + (((e.reason && (e.reason.message || e.reason)) || '') + '').slice(0, 160)); if (errLog.length > 8) errLog.shift(); });
+{ const ce = console.error.bind(console); console.error = (...a) => { try { errLog.push('console: ' + a.map((x) => (x && x.message) || String(x)).join(' ').slice(0, 160)); if (errLog.length > 8) errLog.shift(); } catch {} ce(...a); }; }
+function diag3DText() {
+  const d = v3 ? v3.diag() : null;
+  const L = [`QuickPlan ${M.APP_VERSION} · ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90)}`, `Màn hình ${innerWidth}×${innerHeight} · dpr ${devicePixelRatio}`];
+  if (d) L.push(`Khung 3D ${d.box.join('×')} · canvas ${d.canvas.join('×')} · bộ đệm ${d.buf.join('×')} · mất WebGL: ${d.lost ? 'CÓ' : 'không'}${d.flagLost ? ' (đã báo)' : ''} · chạy: ${d.running ? 'có' : 'không'}`,
+    `Camera ${d.cam.join(', ')} → ${d.target.join(', ')} · near ${d.near} far ${d.far} · tỉ lệ ${d.aspect}${v3.camFix ? ' · đã sửa camera ' + v3.camFix + ' lần' : ''}`,
+    `Vùng ${d.bounds ? d.bounds.join(', ') : '—'} · đối tượng 3D ${d.objects} · lệnh vẽ ${d.calls} · tam giác ${d.tris}${v3.badItems ? ' · bỏ ' + v3.badItems + ' đối tượng toạ độ hỏng' : ''}`, `GPU ${d.gpu} · tex ${d.maxTex}`);
+  else L.push('3D chưa khởi tạo');
+  L.push(`Bản vẽ: ${S.doc ? S.doc.items.length : 0} đối tượng`);
+  if (errLog.length) L.push('Lỗi: ' + errLog.join(' | '));
+  return L.join('\n');
+}
+function check3D(force) {
+  if (!v3 || S.mode !== '3d') { if (force) toast('Mở chế độ 3D trước rồi chạy chẩn đoán'); return; }
+  const d = v3.diag();
+  const bad = d.lost || !d.box[0] || !d.box[1] || d.calls === 0 || v3.camFix;
+  if (!bad && !force) return;
+  let el = $('#diag3d'); if (!el) { el = h('<div id="diag3d" class="diag3d"></div>'); document.body.append(el); }
+  el.hidden = false;
+  el.innerHTML = `<b>Chẩn đoán 3D</b> <small>(chụp màn hình gửi người hỗ trợ)</small><pre></pre><div class="grid2"><button class="btn" data-a="re">⟳ Dựng lại 3D</button><button class="btn" data-a="x">Đóng</button></div>`;
+  el.querySelector('pre').textContent = diag3DText();
+  el.querySelector('[data-a="x"]').onclick = () => (el.hidden = true);
+  el.querySelector('[data-a="re"]').onclick = () => { try { v3.resize(); v3.bounds = null; build3D(); v3.frame(); v3._dirty = true; } catch (err) { errLog.push('rebuild: ' + err.message); } setTimeout(() => check3D(true), 800); };
+}
 async function ensure3D() {
   if (!v3) {
     const { View3D } = await import('./view3d.js');
@@ -5591,6 +5747,7 @@ async function setMode(m) {
       lockControls(v);
       v.start(); update3DSun(); draw3DOverlay();
       $('#bldByUse').checked = !!S.doc.settings.bldColorByUse;
+      setTimeout(() => check3D(false), 1800); // QP-24: 3D trống trên iPad -> hiện thông tin chẩn đoán
     } catch (err) {
       console.error(err);
       toast('Không mở được 3D trên thiết bị này: ' + (err && err.message ? err.message : err), 8000);
@@ -5821,4 +5978,4 @@ window.addEventListener('unhandledrejection', (e) => { const r = e && e.reason; 
 // Bắt đầu
 showHome();
 initRails(); // QP-23: thanh cuộn luôn hiện trên iPad
-window.QP = { S, M, G, changed, railCount: () => railCount(), initRails: () => initRails(true), mergeLayers: (L, T) => mergeLayers(L, T), polyCloseIn: (a, b) => polyCloseIn(a, b), cadLayerFor: (n) => cadLayerFor(n), importLayer: (d, m) => importLayerData(d, m), snapItems: () => snapItems(), autoLayAt: (w) => autoLayAt(w), render, renderProps: () => renderProps(), fit: fitView, build3D, setTool, openDrawing, setMode, bigDemoDrawing, async openDoc(d) { await Store.putDrawing(d); await openDrawing(d.id); }, get v3() { return v3; }, get drag() { return drag; }, FA, frameFor: (fc) => frameFor(fc), pickFaceAt: (x, y) => pickFaceAt(v3, x, y), faceLocal: (fc, x, y) => faceLocal(v3, fc, x, y) }; // để kiểm thử
+window.QP = { S, M, G, changed, diag3D: () => diag3DText(), check3D: (f) => check3D(f), railCount: () => railCount(), initRails: () => initRails(true), mergeLayers: (L, T) => mergeLayers(L, T), polyCloseIn: (a, b) => polyCloseIn(a, b), cadLayerFor: (n) => cadLayerFor(n), importLayer: (d, m) => importLayerData(d, m), snapItems: () => snapItems(), autoLayAt: (w) => autoLayAt(w), render, renderProps: () => renderProps(), fit: fitView, build3D, setTool, openDrawing, setMode, bigDemoDrawing, async openDoc(d) { await Store.putDrawing(d); await openDrawing(d.id); }, get v3() { return v3; }, get drag() { return drag; }, FA, frameFor: (fc) => frameFor(fc), pickFaceAt: (x, y) => pickFaceAt(v3, x, y), faceLocal: (fc, x, y) => faceLocal(v3, fc, x, y) }; // để kiểm thử
