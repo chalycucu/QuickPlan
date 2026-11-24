@@ -22,6 +22,7 @@ import * as FA from './faces.js';
 import * as TR from './terrain.js';
 import * as AL from './autolayout.js';
 import * as BD from './bdata.js';
+import * as LD from './lotdata.js';
 import { polygonize } from './polyclose.js';
 import { initRails, isIPad, railCount } from './scrollrail.js';
 import { demoDrawing, bigDemoDrawing } from './demo.js';
@@ -4697,8 +4698,9 @@ function renderHUD() {
   const catOrder = [...new Set(codes.map((r) => r.cat))];
   const innerSegs = catOrder.map((k) => ({ v: codes.filter((r) => r.cat === k).reduce((s, r) => s + r.v, 0), color: M.CAT_COLORS[k], title: M.CAT_NAMES[k] }));
   const lots = m.lots.slice().sort((x, y) => (x.zone.props.code || '').localeCompare(y.zone.props.code || '') || lotName(x.zone).localeCompare(lotName(y.zone), 'vi', { numeric: true }));
+  const lex = LD.lotExtraCols(lots.map((l) => l.zone));
   hud.innerHTML = `
-    <h3>Chỉ tiêu quy hoạch<span class="hb-exp"><button id="hudXlsx" title="Xuất bảng chỉ tiêu ra Excel">⬇ Excel</button><button id="hudPdf" title="Xuất bảng chỉ tiêu ra PDF">⬇ PDF</button></span><button id="hudClose" title="Thu nhỏ">✕ Đóng</button></h3>
+    <h3>Chỉ tiêu quy hoạch<span class="hb-exp"><button id="hudXlsx" title="Xuất bảng chỉ tiêu ra Excel">⬇ Excel</button><button id="hudPdf" title="Xuất bảng chỉ tiêu ra PDF">⬇ PDF</button><button id="hudImp" title="Nhập chỉ tiêu từng lô từ Excel, nối theo một cột chung">⬆ Nhập Excel</button></span><button id="hudClose" title="Thu nhỏ">✕ Đóng</button></h3>
     <div class="hud-big-body">
       <div class="hb-top">
         ${donutSVG([{ segs: codeSegs, r: 104, w: 34 }, { segs: innerSegs, r: 74, w: 16 }], 260, `<div><small>Tổng diện tích</small><b>${m.total ? G.fmtArea(m.total) : '—'}</b></div>`)}
@@ -4714,8 +4716,8 @@ function renderHUD() {
       <div class="hb-grid lots">
         <div><h4>Chỉ tiêu chung</h4>${indic}</div>
         <div><h4>Chỉ tiêu từng lô</h4>
-          <table class="hb-tab"><thead id="hudShow"><tr><th>Loại đất</th>${zlTh('code', 'Lô')}${zlTh('area', 'Diện tích', 'n')}${zlTh('mdxd', 'MĐXD', 'n')}${zlTh('far', 'HSSDĐ', 'n')}${zlTh('floors', 'Tầng', 'n')}${zlTh('buildLine', 'Chỉ giới XD', 'n')}</tr></thead><tbody>
-          ${lots.map((l) => `<tr class="${m.alerts[l.zone.id] || ''}"><td class="lt" title="${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}"><i style="background:${(M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).color}"></i>${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}</td><td><b>${esc(lotName(l.zone))}</b></td><td class="n">${G.fmtArea(l.area)}</td><td class="n">${G.fmtNum(l.mdxd)}%${l.zone.props.maxMdxd ? ' / ' + l.zone.props.maxMdxd + '%' : ''}</td><td class="n">${G.fmtNum(l.far, 2)}${l.zone.props.maxFar ? ' / ' + l.zone.props.maxFar : ''}</td><td class="n">${l.maxFloors || '—'}${l.zone.props.maxFloors ? ' / ' + l.zone.props.maxFloors : ''}</td><td class="n">${l.zone.props.setback > 0 ? 'lùi ' + G.fmtNum(l.zone.props.setback, 1) + ' m' : '—'}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Chưa có ô đất</td></tr>'}
+          <table class="hb-tab"><thead id="hudShow"><tr><th>Loại đất</th>${zlTh('code', 'Lô')}${zlTh('area', 'Diện tích', 'n')}${zlTh('mdxd', 'MĐXD', 'n')}${zlTh('far', 'HSSDĐ', 'n')}${zlTh('floors', 'Tầng', 'n')}${zlTh('buildLine', 'Chỉ giới XD', 'n')}${lex.map((k) => `<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>
+          ${lots.map((l) => `<tr class="${m.alerts[l.zone.id] || ''}"><td class="lt" title="${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}"><i style="background:${(M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).color}"></i>${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}</td><td><b>${esc(lotName(l.zone))}</b></td><td class="n">${G.fmtArea(l.area)}</td><td class="n">${G.fmtNum(l.mdxd)}%${l.zone.props.maxMdxd ? ' / ' + l.zone.props.maxMdxd + '%' : ''}</td><td class="n">${G.fmtNum(l.far, 2)}${l.zone.props.maxFar ? ' / ' + l.zone.props.maxFar : ''}</td><td class="n">${l.maxFloors || '—'}${l.zone.props.maxFloors ? ' / ' + l.zone.props.maxFloors : ''}</td><td class="n">${l.zone.props.setback > 0 ? 'lùi ' + G.fmtNum(l.zone.props.setback, 1) + ' m' : '—'}</td>${lex.map((k) => `<td>${esc(((l.zone.props.zdata || {}).extra || {})[k] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${7 + lex.length}" class="muted">Chưa có ô đất</td></tr>`}
           </tbody></table>
         </div>
       </div>
@@ -4726,6 +4728,7 @@ function renderHUD() {
   $('#hudXlsx').onclick = () => exportIndicators('xlsx');
   fillHudShow(hud.querySelector('#hudShow'));
   $('#hudPdf').onclick = () => exportIndicators('pdf');
+  $('#hudImp').onclick = () => importLots();
 }
 // QP-24: các hiển thị của phủ SDĐ (nhãn ô đất, chỉ giới XD) nằm trong bảng Chỉ tiêu sử dụng đất
 const zlOn = (k) => { const st = S.doc.settings; return k === 'buildLine' ? st.showBuildLine !== false : (st.zoneLabel || {})[k] !== false; };
@@ -4744,14 +4747,14 @@ function renderBData(hud) {
   setTimeout(() => { const w = hud.querySelector('.bd-wrap'); if (w) w.scrollTop = sTop; if (keep) { const e = hud.querySelector(`.bd-in[data-id="${keep[0]}"][data-k="${CSS.escape(keep[1])}"]`); if (e) e.focus(); } }, 0);
   const rows = BD.buildingRows(S.doc), ex = BD.extraCols(rows), lk = BD.labelKeys(S.doc);
   hud.className = 'hud big bdata';
-  const td = (r, k, v, type = 'text') => `<td><input class="bd-in" data-id="${r.it.id}" data-k="${esc(k)}" type="${type}" value="${esc(v ?? '')}"${k === 'name' ? ` placeholder="${esc(r.auto)}"` : ''}${type === 'number' ? ' min="1" step="1" inputmode="numeric"' : ''}></td>`;
+  const td = (r, k, v, type = 'text') => `<td><input class="bd-in" data-id="${r.it.id}" data-k="${esc(k)}" type="${type}" value="${esc(v ?? '')}"${k === 'name' ? ` placeholder="${esc(r.auto)}"` : k === 'func' ? ` placeholder="${esc(r.funcAuto || '— chưa nằm trên ô đất —')}"` : ''}${type === 'number' ? ' min="1" step="1" inputmode="numeric"' : ''}></td>`;
   hud.innerHTML = `
     <h3>Dữ liệu công trình<span class="hb-exp"><button id="bdXlsx" title="Xuất bảng ra Excel">⬇ Xuất Excel</button><button id="bdImp" title="Nhập dữ liệu từ Excel, nối theo một cột">⬆ Nhập Excel</button></span><button id="hudClose" title="Thu nhỏ">✕ Đóng</button></h3>
     ${hudTabs()}
     <div class="hud-big-body">
-      <div class="note">Tên công trình tự đặt theo mã đất của ô đất bên dưới (VD <b>CT.AN 01</b>), đánh số từ trên xuống dưới, từ trái sang phải; gõ vào ô tên để đặt tên riêng (xoá trắng để về tên tự động). Chức năng lấy theo loại đất, tầng cao lấy theo bản vẽ. Chạm số thứ tự để chọn công trình trên bản vẽ. Tích ô cạnh tên cột để dán nhãn trường đó lên công trình (2D và 3D).</div>
-      <div class="bd-wrap"><table class="hb-tab bd-tab"><thead><tr><th>#</th>${[['name', 'Tên công trình'], ['func', 'Chức năng'], ['floors', 'Tầng cao'], ['material', 'Vật liệu'], ['status', 'Tình trạng'], ...ex.map((k) => [k, k])].map(([k, n]) => `<th${k === 'floors' ? ' class="n"' : ''}><label class="bd-lk" title="Tích để dán nhãn trường này lên công trình trên bản vẽ"><input type="checkbox" data-lk="${esc(k)}"${lk.includes(k) ? ' checked' : ''}>${esc(n)}</label></th>`).join('')}</tr></thead><tbody>
-      ${rows.map((r, i) => `<tr class="${S.selectedId === r.it.id ? 'sel' : ''}"><td><button class="bd-pick" data-id="${r.it.id}">${i + 1}</button></td>${td(r, 'name', r.it.props.bdata && r.it.props.bdata.name ? r.name : '')}<td>${r.func ? esc(r.func) : '<span class="muted">— chưa nằm trên ô đất —</span>'}</td>${td(r, 'floors', r.floors, 'number')}${td(r, 'material', r.material)}${td(r, 'status', r.status)}${ex.map((k) => td(r, k, r.extra[k])).join('')}</tr>`).join('') || '<tr><td colspan="6" class="muted">Chưa có công trình (lớp Công trình)</td></tr>'}
+      <div class="note"><b>Ký hiệu</b> tự đặt theo mã đất của ô đất bên dưới (VD <b>CT.AN 01</b>), đánh số từ trên xuống dưới, từ trái sang phải; gõ vào ô để đặt ký hiệu riêng (xoá trắng để về tự động). <b>Tên công trình</b> gõ tự do. <b>Chức năng</b> mặc định theo loại đất, gõ để sửa (xoá trắng để về theo loại đất). Tầng cao lấy theo bản vẽ. Chạm số thứ tự để chọn công trình trên bản vẽ. Tích ô cạnh tên cột để dán nhãn trường đó lên công trình (2D và 3D).</div>
+      <div class="bd-wrap"><table class="hb-tab bd-tab"><thead><tr><th>#</th>${[['name', 'Ký hiệu'], ['title', 'Tên công trình'], ['func', 'Chức năng'], ['floors', 'Tầng cao'], ['material', 'Vật liệu'], ['status', 'Tình trạng'], ...ex.map((k) => [k, k])].map(([k, n]) => `<th${k === 'floors' ? ' class="n"' : ''}><label class="bd-lk" title="Tích để dán nhãn trường này lên công trình trên bản vẽ"><input type="checkbox" data-lk="${esc(k)}"${lk.includes(k) ? ' checked' : ''}>${esc(n)}</label></th>`).join('')}</tr></thead><tbody>
+      ${rows.map((r, i) => `<tr class="${S.selectedId === r.it.id ? 'sel' : ''}"><td><button class="bd-pick" data-id="${r.it.id}">${i + 1}</button></td>${td(r, 'name', r.it.props.bdata && r.it.props.bdata.name ? r.name : '')}${td(r, 'title', r.title)}${td(r, 'func', r.it.props.bdata && r.it.props.bdata.func ? r.func : '')}${td(r, 'floors', r.floors, 'number')}${td(r, 'material', r.material)}${td(r, 'status', r.status)}${ex.map((k) => td(r, k, r.extra[k])).join('')}</tr>`).join('') || '<tr><td colspan="8" class="muted">Chưa có công trình (lớp Công trình)</td></tr>'}
       </tbody></table></div>
     </div>`;
   bindHudTabs(hud);
@@ -4759,12 +4762,12 @@ function renderBData(hud) {
   hud.querySelectorAll('.bd-in').forEach((inp) => (inp.onchange = () => {
     const it = S.doc.items.find((i) => i.id === inp.dataset.id); if (!it) return;
     checkpoint(); const r = rows.find((x) => x.it === it);
-    BD.setField(it, inp.dataset.k, inp.dataset.k === 'name' && r && inp.value.trim() === r.auto ? '' : inp.value.trim());
+    BD.setField(it, inp.dataset.k, r && ((inp.dataset.k === 'name' && inp.value.trim() === r.auto) || (inp.dataset.k === 'func' && inp.value.trim() === r.funcAuto)) ? '' : inp.value.trim());
     changed();
   }));
   hud.querySelectorAll('input[data-lk]').forEach((cb) => (cb.onchange = () => {
     checkpoint(); const k = cb.dataset.lk, cur = BD.labelKeys(S.doc).filter((x) => x !== k);
-    const order = ['name', 'func', 'floors', 'material', 'status', ...ex];
+    const order = ['name', 'title', 'func', 'floors', 'material', 'status', ...ex];
     S.doc.settings.bdLabels = (cb.checked ? [...cur, k] : cur).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     changed(); if (S.mode === '3d' && v3) draw3DOverlay();
   }));
@@ -4775,7 +4778,7 @@ function renderBData(hud) {
 function bdataTable() {
   const rows = BD.buildingRows(S.doc), ex = BD.extraCols(rows);
   const header = [...BD.BASE_FIELDS.map((f) => f[1]), ...ex, 'Mã đối tượng'];
-  return [header, rows.map((r) => [r.name, r.func, r.floors, r.material, r.status, ...ex.map((k) => r.extra[k] ?? ''), r.it.id])];
+  return [header, rows.map((r) => [r.name, r.title, r.func, r.floors, r.material, r.status, ...ex.map((k) => r.extra[k] ?? ''), r.it.id])];
 }
 async function exportBData() {
   const [header, data] = bdataTable();
@@ -4799,18 +4802,19 @@ function importBData() {
 function bdataJoinDialog(table, fname) {
   const header = table[0].map((h, i) => String(h || '').trim() || 'Cột ' + (i + 1));
   const rows = BD.buildingRows(S.doc), ex = BD.extraCols(rows);
-  const fields = [['name', 'Tên công trình'], ['id', 'Mã đối tượng'], ...ex.map((k) => [k, k])];
-  const guess = Math.max(0, header.findIndex((h) => ['tên công trình', 'ten cong trinh', 'tên', 'name'].includes(BD.norm(h))));
+  const fields = [['name', 'Ký hiệu'], ['title', 'Tên công trình'], ['id', 'Mã đối tượng'], ...ex.map((k) => [k, k])];
+  const guess = Math.max(0, header.findIndex((h) => ['ký hiệu', 'ký hiệu công trình', 'ky hieu', 'name'].includes(BD.norm(h))));
   const guessId = header.findIndex((h) => BD.norm(h) === 'mã đối tượng');
+  hudBig = false; renderHUD();
   openPop(`<div><h3>Nhập dữ liệu công trình</h3>
-    <div class="note"><b>${esc(fname)}</b>: ${table.length - 1} hàng, ${header.length} cột. Chọn cột làm mốc trong file và trường tương ứng của bảng. Các cột khác: trùng tên trường (Vật liệu, Tình trạng, Tầng cao, Tên công trình) thì cập nhật trường đó, còn lại thêm thành cột mới của bảng.</div>
+    <div class="note"><b>${esc(fname)}</b>: ${table.length - 1} hàng, ${header.length} cột. Chọn cột làm mốc trong file và trường tương ứng của bảng. Các cột khác: trùng tên trường (Ký hiệu, Tên công trình, Chức năng, Vật liệu, Tình trạng, Tầng cao) thì cập nhật trường đó, còn lại thêm thành cột mới của bảng.</div>
     <div class="field"><span>Cột mốc trong file</span><select id="bjCol">${header.map((h, i) => `<option value="${i}" ${i === (guessId >= 0 ? guessId : guess) ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>
     <div class="field"><span>Nối với trường</span><select id="bjKey">${fields.map(([k, n]) => `<option value="${esc(k)}" ${(guessId >= 0 ? 'id' : 'name') === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
     <div class="note" id="bjPrev"></div>
     <div class="grid2" style="margin-top:8px"><button class="btn" id="bjCancel">Huỷ</button><button class="btn primary" id="bjOk">Nối dữ liệu</button></div></div>`, (pop) => {
     const col = pop.querySelector('#bjCol'), key = pop.querySelector('#bjKey');
     const prev = () => {
-      const kf = key.value, set = new Set(rows.map((r) => BD.norm(kf === 'name' ? r.name : kf === 'id' ? r.it.id : (r.extra || {})[kf])));
+      const kf = key.value, set = new Set(rows.map((r) => BD.norm(kf === 'name' ? r.name : kf === 'title' ? r.title : kf === 'id' ? r.it.id : (r.extra || {})[kf])));
       const n = table.slice(1).filter((d) => set.has(BD.norm(d[+col.value]))).length;
       pop.querySelector('#bjPrev').innerHTML = `Khớp <b>${n}</b> / ${table.length - 1} hàng của file với ${rows.length} công trình.`;
     };
@@ -4821,6 +4825,59 @@ function bdataJoinDialog(table, fname) {
       const r = BD.joinRows(rows, [header, ...table.slice(1)], +col.value, key.value);
       changed(); closePop(); hudTab = 'ct'; hudBig = true; renderHUD();
       toast(`Đã nối ${r.hit} công trình${r.miss ? ` · ${r.miss} hàng không khớp` : ''}`, 5000);
+    };
+  });
+}
+// ---- QP-24: nhập Excel vào bảng Chỉ tiêu sử dụng đất (nối theo trường chung) ----
+function importLots() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try {
+      const sheets = /\.csv$/i.test(f.name) ? [{ name: 'CSV', rows: BD.readCSV(await f.text()) }] : BD.readXLSX(await f.arrayBuffer(), true);
+      if (!sheets.some((sh) => sh.rows.length >= 2)) return toast('File không có dữ liệu (cần một hàng tiêu đề và các hàng dữ liệu)');
+      lotJoinDialog(sheets, f.name);
+    } catch (err) { console.error(err); toast('Không đọc được file Excel: ' + err.message); }
+  };
+  inp.click();
+}
+function lotJoinDialog(sheets, fname) {
+  const m = S.metrics; if (!m) return;
+  const lots = m.lots.map((l) => ({ zone: l.zone, name: M.lotName(m, l.zone) }));
+  const ex = LD.lotExtraCols(lots.map((l) => l.zone));
+  const fields = [['name', 'Lô (số hiệu lô)'], ['id', 'Mã đối tượng'], ...ex.map((k) => [k, k])];
+  // trang tính mặc định: trang có cột «Lô»
+  const tab = (sh) => { const hr = LD.headerRow(sh.rows); return [sh.rows[hr].map((h, i) => String(h || '').trim() || 'Cột ' + (i + 1)), ...sh.rows.slice(hr + 1)]; };
+  let si = Math.max(0, sheets.findIndex((sh) => sh.rows.length >= 2 && LD.mapHeader(tab(sh)[0]).includes('name')));
+  hudBig = false; renderHUD(); // bảng phóng to che hộp thoại
+  openPop(`<div><h3>Nhập chỉ tiêu sử dụng đất</h3>
+    <div class="note"><b>${esc(fname)}</b>. Chọn cột làm mốc trong file và trường tương ứng của bảng (thường là <b>Lô</b>). Các cột khác: trùng tên trường (<b>Mã đất</b>, <b>MĐXD tối đa</b>, <b>HSSDĐ tối đa</b>, <b>Tầng tối đa</b>, <b>Khoảng lùi</b>) thì cập nhật chỉ tiêu của lô, còn lại thêm thành cột mới của bảng.</div>
+    ${sheets.length > 1 ? `<div class="field"><span>Trang tính</span><select id="ljSheet">${sheets.map((sh, i) => `<option value="${i}" ${i === si ? 'selected' : ''}>${esc(sh.name || 'Trang ' + (i + 1))}</option>`).join('')}</select></div>` : ''}
+    <div class="field"><span>Cột mốc trong file</span><select id="ljCol"></select></div>
+    <div class="field"><span>Nối với trường</span><select id="ljKey">${fields.map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join('')}</select></div>
+    <div class="note" id="ljPrev"></div>
+    <div class="grid2" style="margin-top:8px"><button class="btn" id="ljCancel">Huỷ</button><button class="btn primary" id="ljOk">Nối dữ liệu</button></div></div>`, (pop) => {
+    const col = pop.querySelector('#ljCol'), key = pop.querySelector('#ljKey'), shSel = pop.querySelector('#ljSheet');
+    let T = tab(sheets[si]);
+    const fillCols = () => {
+      T = tab(sheets[si]); const mp = LD.mapHeader(T[0]);
+      const g = mp.indexOf('name'), gid = T[0].findIndex((h) => BD.norm(h) === 'mã đối tượng');
+      col.innerHTML = T[0].map((h, i) => `<option value="${i}" ${i === (g >= 0 ? g : gid >= 0 ? gid : 0) ? 'selected' : ''}>${esc(h)}</option>`).join('');
+      key.value = g < 0 && gid >= 0 ? 'id' : 'name';
+    };
+    const prev = () => {
+      const kf = key.value, set = new Set(lots.map((l) => BD.norm(kf === 'name' ? l.name : kf === 'id' ? l.zone.id : ((l.zone.props.zdata || {}).extra || {})[kf])));
+      const n = T.slice(1).filter((d) => set.has(BD.norm(d[+col.value]))).length;
+      pop.querySelector('#ljPrev').innerHTML = `Khớp <b>${n}</b> / ${T.length - 1} hàng của file với ${lots.length} lô.`;
+    };
+    if (shSel) shSel.onchange = () => { si = +shSel.value; fillCols(); prev(); };
+    col.onchange = prev; key.onchange = prev; fillCols(); prev();
+    pop.querySelector('#ljCancel').onclick = () => closePop();
+    pop.querySelector('#ljOk').onclick = () => {
+      checkpoint();
+      const r = LD.joinLots(lots, T, +col.value, key.value, M.LANDUSE);
+      changed(); closePop(); hudTab = 'cs'; hudBig = true; renderHUD();
+      toast(`Đã nối ${r.hit} lô${r.miss ? ` · ${r.miss} hàng không khớp` : ''}${r.badCode ? ` · ${r.badCode} mã đất không có trong bảng mã` : ''}`, 5000);
     };
   });
 }

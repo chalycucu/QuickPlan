@@ -579,3 +579,4 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 .hb-tab td.lt { max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hb-grid.lots { grid-template-columns: minmax(200px, 1fr) 2.6fr; }
 @media (max-width: 700px) { .hb-grid.lots { grid-template-columns: 1fr; } }
+.bd-tab .bd-in[data-k="title"], .bd-tab .bd-in[data-k="func"] { min-width: 210px; }

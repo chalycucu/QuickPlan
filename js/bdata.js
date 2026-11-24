@@ -4,7 +4,8 @@ import * as M from './model.js';
 import { zipSync, unzipSync, strToU8, strFromU8 } from '../vendor/three/jsm/libs/fflate.module.js';
 
 export const BASE_FIELDS = [
-  ['name', 'Tên công trình'],
+  ['name', 'Ký hiệu'],
+  ['title', 'Tên công trình'],
   ['func', 'Chức năng'],
   ['floors', 'Tầng cao'],
   ['material', 'Vật liệu'],
@@ -37,6 +38,8 @@ export function buildingRows(doc) {
     r.auto = (k ? 'CT.' + k : 'CT') + ' ' + String(cnt[k]).padStart(2, '0');
     const P = r.it.props, d = P.bdata || {};
     r.name = d.name || r.auto;
+    r.title = d.title || '';
+    r.funcAuto = r.func; if (d.func) r.func = d.func; // chức năng: sửa tay được, xoá trắng thì về theo loại đất
     r.material = d.material || '';
     r.status = d.status || '';
     r.extra = d.extra || {};
@@ -46,7 +49,7 @@ export function buildingRows(doc) {
 // QP-24: nhãn dán lên công trình trên bản vẽ (các trường được tích trong bảng Dữ liệu công trình)
 export const labelKeys = (doc) => (doc.settings && Array.isArray(doc.settings.bdLabels) ? doc.settings.bdLabels : []);
 export function labelLines(r, keys) {
-  return keys.map((k) => (k === 'name' ? r.name : k === 'func' ? r.func : k === 'floors' ? (r.floors ? r.floors + 'T' : '') : k === 'material' ? r.material : k === 'status' ? r.status : r.extra && r.extra[k]))
+  return keys.map((k) => (k === 'name' ? r.name : k === 'title' ? r.title : k === 'func' ? r.func : k === 'floors' ? (r.floors ? r.floors + 'T' : '') : k === 'material' ? r.material : k === 'status' ? r.status : r.extra && r.extra[k]))
     .filter((t) => t != null && String(t).trim() !== '').map((t) => String(t).trim());
 }
 const lblCache = new WeakMap();
@@ -65,7 +68,7 @@ export function extraCols(rows) { const s = new Set(); for (const r of rows) for
 export function setField(it, key, val) {
   const P = it.props; const d = P.bdata || (P.bdata = {});
   if (key === 'floors') { const n = Math.round(+val); if (n >= 1) P.floors = n; return; }
-  if (key === 'name' || key === 'material' || key === 'status') { if (val === '' || val == null) delete d[key]; else d[key] = String(val); }
+  if (key === 'name' || key === 'title' || key === 'func' || key === 'material' || key === 'status') { if (val === '' || val == null) delete d[key]; else d[key] = String(val); }
   else { const e = d.extra || (d.extra = {}); if (val === '' || val == null) delete e[key]; else e[key] = String(val); }
   if (!Object.keys(d).length || (Object.keys(d).length === 1 && d.extra && !Object.keys(d.extra).length)) delete P.bdata;
 }
@@ -94,19 +97,26 @@ export function toXLSX(header, data, sheet = 'DuLieuCongTrinh') {
 const unx = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');
 const colIdx = (ref) => { const m = /^([A-Z]+)/.exec(ref); let n = 0; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
 // đọc trang tính đầu tiên của file .xlsx -> mảng các hàng (mảng giá trị chữ)
-export function readXLSX(buf) {
+export function readXLSX(buf, all = false) {
   const z = unzipSync(new Uint8Array(buf));
   const txt = (p) => (z[p] ? strFromU8(z[p]) : '');
   const ss = [];
   const sst = txt('xl/sharedStrings.xml');
   for (const si of sst.match(/<si>[\s\S]*?<\/si>/g) || []) ss.push(unx((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map((t) => t.replace(/<t[^>]*>|<\/t>/g, '')).join('')));
-  // trang tính đầu tiên theo workbook
-  let sheetPath = 'xl/worksheets/sheet1.xml';
+  // các trang tính theo thứ tự trong workbook (all = false: chỉ trang đầu)
   const wb = txt('xl/workbook.xml'), rels = txt('xl/_rels/workbook.xml.rels');
-  const first = /<sheet\b[^>]*r:id="([^"]+)"/.exec(wb);
-  if (first) { const re = new RegExp(`<Relationship\\b[^>]*Id="${first[1]}"[^>]*Target="([^"]+)"`); const m = re.exec(rels) || new RegExp(`<Relationship\\b[^>]*Target="([^"]+)"[^>]*Id="${first[1]}"`).exec(rels); if (m) sheetPath = 'xl/' + m[1].replace(/^\/?xl\//, '').replace(/^\//, ''); }
-  const sx = txt(sheetPath);
-  if (!sx) throw new Error('không thấy trang tính trong file Excel');
+  const list = [];
+  for (const sm of wb.matchAll(/<sheet\b[^>]*>/g)) {
+    const id = (/r:id="([^"]+)"/.exec(sm[0]) || [])[1], name = unx((/\bname="([^"]*)"/.exec(sm[0]) || [])[1] || '');
+    let path = null;
+    if (id) { const m = new RegExp(`<Relationship\\b[^>]*Id="${id}"[^>]*Target="([^"]+)"`).exec(rels) || new RegExp(`<Relationship\\b[^>]*Target="([^"]+)"[^>]*Id="${id}"`).exec(rels); if (m) path = 'xl/' + m[1].replace(/^\/?xl\//, '').replace(/^\//, ''); }
+    list.push({ name, path: path || `xl/worksheets/sheet${list.length + 1}.xml` });
+  }
+  if (!list.length) list.push({ name: 'Sheet1', path: 'xl/worksheets/sheet1.xml' });
+  const out = [];
+  for (const sh of all ? list : list.slice(0, 1)) {
+    const sx = txt(sh.path);
+    if (!sx) { if (!all) throw new Error('không thấy trang tính trong file Excel'); continue; }
   const rows = [];
   for (const rm of sx.match(/<row\b[\s\S]*?<\/row>|<row\b[^>]*\/>/g) || []) {
     const r = [];
@@ -120,7 +130,10 @@ export function readXLSX(buf) {
     for (let i = 0; i < r.length; i++) if (r[i] == null) r[i] = '';
     rows.push(r);
   }
-  return rows.filter((r) => r.some((v) => String(v).trim() !== ''));
+    out.push({ name: sh.name, rows: rows.filter((r) => r.some((v) => String(v).trim() !== '')) });
+  }
+  if (!out.length) throw new Error('không thấy trang tính trong file Excel');
+  return all ? out : out[0].rows;
 }
 // CSV (Excel lưu dạng CSV): dấu phẩy hoặc chấm phẩy
 export function readCSV(text) {
@@ -141,7 +154,8 @@ export function joinRows(rows, table, keyCol, keyField) {
   const [header, ...data] = table;
   const fieldByName = new Map(BASE_FIELDS.map(([k, n]) => [norm(n), k]));
   for (const [k] of BASE_FIELDS) fieldByName.set(k, k);
-  const idx = new Map(); for (const r of rows) { const v = keyField === 'name' ? r.name : keyField === 'auto' ? r.auto : keyField === 'id' ? r.it.id : (r.extra || {})[keyField]; if (v != null && v !== '') idx.set(norm(v), r); }
+  fieldByName.set('ký hiệu công trình', 'name');
+  const idx = new Map(); for (const r of rows) { const v = keyField === 'name' ? r.name : keyField === 'title' ? r.title : keyField === 'auto' ? r.auto : keyField === 'id' ? r.it.id : (r.extra || {})[keyField]; if (v != null && v !== '') idx.set(norm(v), r); }
   let hit = 0, miss = 0, changed = 0;
   for (const d of data) {
     const r = idx.get(norm(d[keyCol])); if (!r) { if (String(d[keyCol] ?? '').trim()) miss++; continue; }
@@ -149,9 +163,8 @@ export function joinRows(rows, table, keyCol, keyField) {
     header.forEach((h, c) => {
       if (c === keyCol || !String(h).trim()) return;
       const f = fieldByName.get(norm(h));
-      if (f === 'func') return; // chức năng luôn lấy theo đất bên dưới
       const v = d[c] ?? '';
-      if (f) { if (f === 'floors' && String(v).trim() === '') return; setField(r.it, f, f === 'name' && norm(v) === norm(r.auto) ? '' : v); }
+      if (f) { if (f === 'floors' && String(v).trim() === '') return; setField(r.it, f, (f === 'name' && norm(v) === norm(r.auto)) || (f === 'func' && norm(v) === norm(r.funcAuto)) ? '' : v); }
       else setField(r.it, String(h).trim(), v);
       changed++;
     });
