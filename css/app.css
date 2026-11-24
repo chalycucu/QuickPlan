@@ -572,3 +572,10 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 /* QP-24: ô tích dán nhãn ở tiêu đề bảng Dữ liệu công trình */
 .bd-tab th .bd-lk { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
 .bd-tab th .bd-lk input { width: 16px; height: 16px; margin: 0; accent-color: #16325c; }
+/* QP-24: ô tích hiển thị phủ SDĐ ở tiêu đề bảng Chỉ tiêu từng lô */
+.hb-tab th .bd-lk { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+.hb-tab th .bd-lk input { width: 15px; height: 15px; margin: 0; accent-color: #16325c; }
+.hb-grid > div { min-width: 0; overflow-x: auto; }
+.hb-tab td.lt { max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-grid.lots { grid-template-columns: minmax(200px, 1fr) 2.6fr; }
+@media (max-width: 700px) { .hb-grid.lots { grid-template-columns: 1fr; } }

@@ -1546,7 +1546,6 @@ function renderToolOpts() {
       }
       { const add = h('<button class="chip add">🎨 Đổi màu / thêm chức năng</button>'); add.onclick = () => openLanduseDialog(o.zone.code); box.append(add); }
       box.append(lbl('Khoảng lùi (m)', numInput(o.zone.setback, (v) => { o.zone.setback = v; saveOpts(); })));
-      { const c = h(`<button class="chip ${S.doc.settings.showBuildLine !== false ? 'on' : ''}">Hiện chỉ giới XD</button>`); c.onclick = () => { S.doc.settings.showBuildLine = S.doc.settings.showBuildLine === false; changed(); renderToolOpts(); }; box.append(c); }
       box.append(gapRow());
       if (!M.LANDUSE[o.zone.code]) o.zone.code = 'ODT';
       hint({
@@ -4712,11 +4711,11 @@ function renderHUD() {
           <p class="muted small">Vành ngoài: từng loại đất · vành trong: nhóm đất</p>
         </div>
       </div>
-      <div class="hb-grid">
+      <div class="hb-grid lots">
         <div><h4>Chỉ tiêu chung</h4>${indic}</div>
         <div><h4>Chỉ tiêu từng lô</h4>
-          <table class="hb-tab"><thead><tr><th>Loại đất</th><th>Lô</th><th class="n">Diện tích</th><th class="n">MĐXD</th><th class="n">HSSDĐ</th><th class="n">Tầng</th></tr></thead><tbody>
-          ${lots.map((l) => `<tr class="${m.alerts[l.zone.id] || ''}"><td class="lt"><i style="background:${(M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).color}"></i>${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}</td><td><b>${esc(lotName(l.zone))}</b></td><td class="n">${G.fmtArea(l.area)}</td><td class="n">${G.fmtNum(l.mdxd)}%${l.zone.props.maxMdxd ? ' / ' + l.zone.props.maxMdxd + '%' : ''}</td><td class="n">${G.fmtNum(l.far, 2)}${l.zone.props.maxFar ? ' / ' + l.zone.props.maxFar : ''}</td><td class="n">${l.maxFloors || '—'}${l.zone.props.maxFloors ? ' / ' + l.zone.props.maxFloors : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Chưa có ô đất</td></tr>'}
+          <table class="hb-tab"><thead id="hudShow"><tr><th>Loại đất</th>${zlTh('code', 'Lô')}${zlTh('area', 'Diện tích', 'n')}${zlTh('mdxd', 'MĐXD', 'n')}${zlTh('far', 'HSSDĐ', 'n')}${zlTh('floors', 'Tầng', 'n')}${zlTh('buildLine', 'Chỉ giới XD', 'n')}</tr></thead><tbody>
+          ${lots.map((l) => `<tr class="${m.alerts[l.zone.id] || ''}"><td class="lt" title="${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}"><i style="background:${(M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).color}"></i>${esc((M.LANDUSE[l.zone.props.code] || M.LANDUSE.ODT).name)}</td><td><b>${esc(lotName(l.zone))}</b></td><td class="n">${G.fmtArea(l.area)}</td><td class="n">${G.fmtNum(l.mdxd)}%${l.zone.props.maxMdxd ? ' / ' + l.zone.props.maxMdxd + '%' : ''}</td><td class="n">${G.fmtNum(l.far, 2)}${l.zone.props.maxFar ? ' / ' + l.zone.props.maxFar : ''}</td><td class="n">${l.maxFloors || '—'}${l.zone.props.maxFloors ? ' / ' + l.zone.props.maxFloors : ''}</td><td class="n">${l.zone.props.setback > 0 ? 'lùi ' + G.fmtNum(l.zone.props.setback, 1) + ' m' : '—'}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Chưa có ô đất</td></tr>'}
           </tbody></table>
         </div>
       </div>
@@ -4725,7 +4724,19 @@ function renderHUD() {
   hud.querySelector('h3').insertAdjacentHTML('afterend', hudTabs()); bindHudTabs(hud);
   $('#hudClose').onclick = () => { hudBig = false; renderHUD(); };
   $('#hudXlsx').onclick = () => exportIndicators('xlsx');
+  fillHudShow(hud.querySelector('#hudShow'));
   $('#hudPdf').onclick = () => exportIndicators('pdf');
+}
+// QP-24: các hiển thị của phủ SDĐ (nhãn ô đất, chỉ giới XD) nằm trong bảng Chỉ tiêu sử dụng đất
+const zlOn = (k) => { const st = S.doc.settings; return k === 'buildLine' ? st.showBuildLine !== false : (st.zoneLabel || {})[k] !== false; };
+const zlTh = (k, n, cls = '') => `<th${cls ? ` class="${cls}"` : ''}><label class="bd-lk" title="Tích để hiện trường này trên ô đất ở bản vẽ"><input type="checkbox" data-zl="${k}"${zlOn(k) ? ' checked' : ''}>${n}</label></th>`;
+function fillHudShow(box) {
+  if (!box) return;
+  box.querySelectorAll('input[data-zl]').forEach((cb) => (cb.onchange = () => {
+    const st = S.doc.settings, k = cb.dataset.zl;
+    if (k === 'buildLine') st.showBuildLine = cb.checked; else (st.zoneLabel || (st.zoneLabel = {}))[k] = cb.checked;
+    changed();
+  }));
 }
 // ---- QP-23: bảng Dữ liệu công trình ----
 function renderBData(hud) {
@@ -4857,7 +4868,7 @@ $('#btnLayers').onclick = () => openLayers();
 function openLayers() {
   const keepScroll = $('#pop').hidden ? 0 : $('#pop').scrollTop;
   setTimeout(() => { $('#pop').scrollTop = keepScroll; }, 0);
-  openPop('<div><h3>Quản lý lớp</h3><div class="layer-head"><span>Hiện</span><span>Lớp (trên cùng che lớp dưới)</span><span>Khoá</span><span>Độ rõ</span></div><div id="layerRows"></div><div class="grid2" style="margin-top:8px"><button class="btn" id="lyAdd">＋ Tạo lớp mới</button><button class="btn" id="lyMerge">⇲ Gộp lớp…</button></div><h4>Xuất / nhập theo lớp</h4><div class="note"><b>Xuất một lớp:</b> bấm nút <b>⤓ Xuất dữ liệu</b> bên dưới rồi chọn lớp, hoặc bấm chuột phải vào tên lớp ở bảng trên (iPad: chạm giữ tên lớp) rồi chọn <b>Xuất lớp</b>. Đầu tên file: <b>dg</b> đường, <b>sdđ</b> sử dụng đất, <b>cq</b> cảnh quan, <b>ct</b> công trình, <b>pt</b> phân tích. <b>Nhập:</b> file của lớp nào vào đúng lớp đó; lớp tự tạo vào lớp cùng tên, chưa có thì tạo lớp mới.</div><div class="seg" id="lyMode" style="width:100%;margin-top:8px"><button data-m="add" style="flex:1">＋ Thêm vào lớp</button><button data-m="replace" style="flex:1">⟲ Xoá và thay lớp cũ</button></div><button class="btn primary" id="lyImp" style="width:100%;margin-top:8px">⤒ Nhập lớp từ file…</button><button class="btn" id="lyExpBtn" style="width:100%;margin-top:8px">⤓ Xuất dữ liệu…</button><h4>Nhãn ô đất hiển thị</h4><div id="zlRows" class="chips"></div><div class="note">Dùng <b>▲ ▼</b> để đổi thứ tự lớp: lớp ở trên che lớp ở dưới. Lớp bị khoá (🔒) vẫn hiển thị và chọn xem được, nhưng không thể xoá, sửa hay di chuyển đối tượng. Lớp tự tạo: bấm <b>✎</b> để đổi tên, <b>Vẽ vào</b> để các nét vẽ mới vào lớp đó; muốn đưa đối tượng có sẵn vào lớp, chọn đối tượng rồi chọn lớp trong bảng thuộc tính.</div></div>', (pop) => {
+  openPop('<div><h3>Quản lý lớp</h3><div class="layer-head"><span>Hiện</span><span>Lớp (trên cùng che lớp dưới)</span><span>Khoá</span><span>Độ rõ</span></div><div id="layerRows"></div><div class="grid2" style="margin-top:8px"><button class="btn" id="lyAdd">＋ Tạo lớp mới</button><button class="btn" id="lyMerge">⇲ Gộp lớp…</button></div><h4>Xuất / nhập theo lớp</h4><div class="note"><b>Xuất một lớp:</b> bấm nút <b>⤓ Xuất dữ liệu</b> bên dưới rồi chọn lớp, hoặc bấm chuột phải vào tên lớp ở bảng trên (iPad: chạm giữ tên lớp) rồi chọn <b>Xuất lớp</b>. Đầu tên file: <b>dg</b> đường, <b>sdđ</b> sử dụng đất, <b>cq</b> cảnh quan, <b>ct</b> công trình, <b>pt</b> phân tích. <b>Nhập:</b> file của lớp nào vào đúng lớp đó; lớp tự tạo vào lớp cùng tên, chưa có thì tạo lớp mới.</div><div class="seg" id="lyMode" style="width:100%;margin-top:8px"><button data-m="add" style="flex:1">＋ Thêm vào lớp</button><button data-m="replace" style="flex:1">⟲ Xoá và thay lớp cũ</button></div><button class="btn primary" id="lyImp" style="width:100%;margin-top:8px">⤒ Nhập lớp từ file…</button><button class="btn" id="lyExpBtn" style="width:100%;margin-top:8px">⤓ Xuất dữ liệu…</button><div class="note">Dùng <b>▲ ▼</b> để đổi thứ tự lớp: lớp ở trên che lớp ở dưới. Lớp bị khoá (🔒) vẫn hiển thị và chọn xem được, nhưng không thể xoá, sửa hay di chuyển đối tượng. Lớp tự tạo: bấm <b>✎</b> để đổi tên, <b>Vẽ vào</b> để các nét vẽ mới vào lớp đó; muốn đưa đối tượng có sẵn vào lớp, chọn đối tượng rồi chọn lớp trong bảng thuộc tính.</div></div>', (pop) => {
     M.upgradeDoc(S.doc);
     const box = pop.querySelector('#layerRows');
     const order = M.layerOrder(S.doc);
@@ -4915,13 +4926,6 @@ function openLayers() {
       S.doc.settings.activeLayer = id;
       changed(); openLayers(); toast(`Đã tạo lớp «${nm.trim()}» – nét vẽ mới sẽ vào lớp này`);
     };
-    const zl = S.doc.settings.zoneLabel;
-    const zb = pop.querySelector('#zlRows');
-    for (const [k, nme] of [['code', 'Số hiệu lô'], ['area', 'Diện tích'], ['mdxd', 'Mật độ XD'], ['far', 'Hệ số SDĐ'], ['floors', 'Tầng cao']]) {
-      const c = h(`<button class="chip ${zl[k] !== false ? 'on' : ''}">${zl[k] !== false ? '✓ ' : ''}${nme}</button>`);
-      c.onclick = () => { zl[k] = zl[k] === false; c.classList.toggle('on', zl[k]); c.textContent = (zl[k] ? '✓ ' : '') + nme; changed(); };
-      zb.append(c);
-    }
   });
 }
 
