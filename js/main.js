@@ -2935,6 +2935,21 @@ function eraseAt(w, sc) {
 }
 
 // Tô ô đất: chạm (hoặc thả mã SDĐ) vào vùng khép kín giữa đường / ranh giới
+// QP-24: phủ SDĐ vào đa giác kín của mọi lớp đang hiện (Cọ nháp, CAD, công trình, cây xanh, vật liệu phủ, vùng mây, hồ…):
+// đa giác kín nào bao điểm chạm thì cạnh của nó làm ranh giới vùng phủ (đa giác không bao điểm chạm không ảnh hưởng)
+function closedWallsAt(w) {
+  const vis = Object.fromEntries(S.doc.layers.map((l) => [l.id, l.visible && l.opacity > 0]));
+  const out = [];
+  for (const it of M.liveItems(S.doc)) {
+    if (it.kind === 'zone' || it.kind === 'road' || it.kind === 'facet' || it.kind === 'junction' || vis[M.layerOf(it)] === false || !inIso(it)) continue;
+    let r = ringOfItem(it);
+    if (!r && it.pts && it.pts.length > 3 && it.kind !== 'road' && it.kind !== 'junction' && gapTol() > 0 && G.dist(it.pts[0], it.pts[it.pts.length - 1]) <= gapTol()) r = it.pts.map((q) => [q[0], q[1]]); // gần khép (hở nhỏ)
+    if (!r || r.length < 3 || !G.pointInPolygon(w, r)) continue;
+    if ((it.holes || []).some((hh) => G.pointInPolygon(w, hh))) continue;
+    out.push(r.concat([r[0]]));
+  }
+  return out;
+}
 function tapZone(w, code = S.opts.zone.code) {
   const lu = M.LANDUSE[code];
   const z = S.doc.items.filter((i) => i.kind === 'zone').reverse().find((i) => G.pointInPolygon(w, i.pts) && !(i.holes || []).some((hh) => G.pointInPolygon(w, hh)));
@@ -2943,7 +2958,7 @@ function tapZone(w, code = S.opts.zone.code) {
     Object.assign(z.props, { code, maxMdxd: lu.mdxd, maxFar: lu.far, maxFloors: lu.floors });
     S.selectedId = z.id; changed(); toast(`Đã đổi ô đất thành ${M.luLabel(code)} – ${lu.name}`); return;
   }
-  const poly = fillRegionAt(S.doc, w, [], { gap: gapTol() });
+  const poly = fillRegionAt(S.doc, w, closedWallsAt(w), { gap: gapTol() });
   if (!poly) { toast('Vùng này chưa được khép kín bởi đường hoặc ranh giới. Hãy khoanh vùng bằng bút.'); return; }
   const prev = S.opts.zone.code; S.opts.zone.code = code;
   const it = newZone(poly.map((q) => [q[0], q[1]])); S.opts.zone.code = prev;
