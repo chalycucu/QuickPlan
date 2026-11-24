@@ -202,6 +202,12 @@ export class View3D {
     const r = this.renderer.domElement.getBoundingClientRect();
     return [((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height];
   }
+  // như toScreen, kèm cờ «ở trước camera» (để bỏ nhãn nằm sau lưng)
+  toScreenZ(w, hgt = 0) {
+    const v = new THREE.Vector3(w[0], hgt, w[1]).project(this.camera);
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return [((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height, v.z < 1 && v.z > -1];
+  }
   // độ cao mặt đất (địa hình thật) tại điểm w; 0 khi mặt đất phẳng
   gy(w) { return GZ ? GZ(w[0], w[1]) : 0; }
   pxPerMeter(w, h = 0) {

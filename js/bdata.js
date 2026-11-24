@@ -43,6 +43,24 @@ export function buildingRows(doc) {
   }
   return rows;
 }
+// QP-24: nhãn dán lên công trình trên bản vẽ (các trường được tích trong bảng Dữ liệu công trình)
+export const labelKeys = (doc) => (doc.settings && Array.isArray(doc.settings.bdLabels) ? doc.settings.bdLabels : []);
+export function labelLines(r, keys) {
+  return keys.map((k) => (k === 'name' ? r.name : k === 'func' ? r.func : k === 'floors' ? (r.floors ? r.floors + 'T' : '') : k === 'material' ? r.material : k === 'status' ? r.status : r.extra && r.extra[k]))
+    .filter((t) => t != null && String(t).trim() !== '').map((t) => String(t).trim());
+}
+const lblCache = new WeakMap();
+// id công trình -> các dòng nhãn; dùng lại kết quả khi chỉ số (metrics) chưa đổi
+export function labelMap(doc, keys, key) {
+  if (!keys.length) return null;
+  const sig = keys.join('\u0001') + '|' + doc.items.length;
+  const c = key && lblCache.get(key);
+  if (c && c.doc === doc && c.sig === sig) return c.map;
+  const map = {};
+  for (const r of buildingRows(doc)) { const L = labelLines(r, keys); if (L.length) map[r.it.id] = { lines: L, floors: r.floors }; }
+  if (key) lblCache.set(key, { doc, sig, map });
+  return map;
+}
 export function extraCols(rows) { const s = new Set(); for (const r of rows) for (const k of Object.keys(r.extra || {})) s.add(k); return [...s]; }
 export function setField(it, key, val) {
   const P = it.props; const d = P.bdata || (P.bdata = {});

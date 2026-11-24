@@ -5,6 +5,7 @@ import { ICONS, drawIconAt, drawInk, inkSize } from './icons.js';
 import { matImage, findMat } from './materials.js';
 import { drawAxisGrid } from './axis.js';
 import { junctionCorners } from './roadops.js';
+import { labelKeys, labelMap } from './bdata.js';
 import { LANDUSE, roadTotalWidth, itemArea, lotName, layerOf, layerOrder, cadInert, landTrees, landTreeSize, LAND_CLOSED, LAND_COLORS, TREE_TYPES } from './model.js';
 
 export class View {
@@ -313,6 +314,7 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
   for (const r of roads) strokeBand(ctx, v, r.pts, Math.max(0.15, 1 / v.scale), '#f4f1e8');
   ctx.setLineDash([]);
   for (const it of by('land')) if (!LAND_CLOSED[it.props.style] || it.props.style === 'grove') drawLandTrees(ctx, v, it);
+  const bdKeys = labelKeys(doc), bdLbl = bdKeys.length && v.scale > 0.6 ? labelMap(doc, bdKeys, alerts) : null, bdFl = bdKeys.includes('floors');
   for (const b of by('building')) {
     polyWithHoles(ctx, v, b);
     const al = viol ? (viol[b.id] ? 'over' : null) : alerts[b.id];
@@ -320,6 +322,8 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
     ctx.strokeStyle = viol && al ? '#991b1b' : al ? ALERT_COL[al] : '#1d2a3a'; ctx.lineWidth = al ? 2.5 : 1.5;
     if (b.props.on) { ctx.setLineDash([6, 4]); ctx.lineWidth = 2; } // khối chồng trên mái khối khác
     ctx.stroke(); ctx.setLineDash([]);
+    const bl = bdLbl && bdLbl[b.id];
+    if (bl) { drawBLabel(ctx, v, b, bl.lines, bdFl || (doc.settings.zoneLabel || {}).floors === false ? null : (b.props.on ? '+' : '') + b.props.floors + 'T'); continue; }
     if (v.scale > 0.6 && (doc.settings.zoneLabel || {}).floors !== false) {
       const c = v.toScreen(G.centroid(b.pts));
       ctx.fillStyle = '#1d2a3a'; ctx.font = `600 ${Math.min(14, 6 + v.scale * 2)}px system-ui, sans-serif`;
@@ -358,6 +362,20 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
   if (viol) for (const b of by('building')) if (viol[b.id]) drawViolLabel(ctx, v, b, viol[b.id]);
 }
 // Kiểm tra chỉ tiêu: nhãn đỏ ghi các vi phạm ngay trên công trình
+// QP-24: nhãn dữ liệu công trình (các trường được tích), canh giữa khối, viền trắng cho dễ đọc
+function drawBLabel(ctx, v, b, lines, head) {
+  const c = v.toScreen(G.centroid(b.pts)), fs = Math.min(14, 6 + v.scale * 2), fs2 = Math.max(9, fs - 2);
+  const L = (head ? [[head, `600 ${fs}px system-ui, sans-serif`, fs]] : []).concat(lines.map((t, i) => [t, `${i === 0 && !head ? 600 : 500} ${fs2}px system-ui, sans-serif`, fs2]));
+  const H = L.reduce((a, l) => a + l[2] * 1.2, 0);
+  let y = c[1] - H / 2;
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  for (const [t, f, sz] of L) {
+    y += sz * 0.6; ctx.font = f;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 3; ctx.strokeText(t, c[0], y);
+    ctx.fillStyle = '#1d2a3a'; ctx.fillText(t, c[0], y); y += sz * 0.6;
+  }
+  ctx.restore();
+}
 export function drawViolLabel(ctx, v, b, lines) {
   const c = v.toScreen(G.centroid(b.pts));
   ctx.font = '600 12px system-ui, sans-serif';

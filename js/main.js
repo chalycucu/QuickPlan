@@ -3754,6 +3754,24 @@ function drawFaceOverlay(ox) {
     if (d.mode === 'curve' || d.mode === 'free') { path(d.pts); ox.stroke(); }
   }
 }
+// QP-24: nhãn dữ liệu công trình trong 3D (trên mái khối)
+function draw3DBLabels(ox) {
+  const keys = BD.labelKeys(S.doc); if (!keys.length) return;
+  const map = BD.labelMap(S.doc, keys, S.metrics); if (!map) return;
+  ox.save(); ox.textAlign = 'center'; ox.textBaseline = 'middle'; ox.lineJoin = 'round';
+  for (const b of S.doc.items) {
+    const m = map[b.id], ly = S.doc.layers.find((l) => l.id === M.layerOf(b)); if (!m || (ly && !ly.visible)) continue;
+    const c = G.centroid(b.pts), top = v3.gy(c) + (m.floors || b.props.floors || 1) * (b.props.floorH || 3.3) + 1.5;
+    const p = v3.toScreenZ(c, top); if (!p[2]) continue;
+    let y = p[1] - (m.lines.length - 1) * 8;
+    m.lines.forEach((t, i) => {
+      ox.font = `${i ? 500 : 600} ${i ? 12 : 13}px system-ui, sans-serif`;
+      ox.strokeStyle = 'rgba(255,255,255,.92)'; ox.lineWidth = 3.5; ox.strokeText(t, p[0], y);
+      ox.fillStyle = '#1d2a3a'; ox.fillText(t, p[0], y); y += 16;
+    });
+  }
+  ox.restore();
+}
 function draw3DOverlay() {
   if (!v3) return;
   const oc = v3.overlay, ox = oc.getContext('2d');
@@ -3773,6 +3791,7 @@ function draw3DOverlay() {
       ox.beginPath(); ox.moveTo(a[0], a[1]); ox.lineTo(b[0], b[1]); ox.stroke();
     }
   }
+  draw3DBLabels(ox);
   if (S.tool === 'facet') drawFaceOverlay(ox);
   if (S.circleDraft) {
     const cp = SH.circlePts(S.circleDraft.c, S.circleDraft.r, 72).map((q) => v3.toScreen(q));
@@ -4712,15 +4731,15 @@ function renderHUD() {
 function renderBData(hud) {
   const fa = document.activeElement, keep = fa && fa.classList && fa.classList.contains('bd-in') ? [fa.dataset.id, fa.dataset.k] : null, sTop = (hud.querySelector('.bd-wrap') || {}).scrollTop || 0;
   setTimeout(() => { const w = hud.querySelector('.bd-wrap'); if (w) w.scrollTop = sTop; if (keep) { const e = hud.querySelector(`.bd-in[data-id="${keep[0]}"][data-k="${CSS.escape(keep[1])}"]`); if (e) e.focus(); } }, 0);
-  const rows = BD.buildingRows(S.doc), ex = BD.extraCols(rows);
+  const rows = BD.buildingRows(S.doc), ex = BD.extraCols(rows), lk = BD.labelKeys(S.doc);
   hud.className = 'hud big bdata';
   const td = (r, k, v, type = 'text') => `<td><input class="bd-in" data-id="${r.it.id}" data-k="${esc(k)}" type="${type}" value="${esc(v ?? '')}"${k === 'name' ? ` placeholder="${esc(r.auto)}"` : ''}${type === 'number' ? ' min="1" step="1" inputmode="numeric"' : ''}></td>`;
   hud.innerHTML = `
     <h3>Dữ liệu công trình<span class="hb-exp"><button id="bdXlsx" title="Xuất bảng ra Excel">⬇ Xuất Excel</button><button id="bdImp" title="Nhập dữ liệu từ Excel, nối theo một cột">⬆ Nhập Excel</button></span><button id="hudClose" title="Thu nhỏ">✕ Đóng</button></h3>
     ${hudTabs()}
     <div class="hud-big-body">
-      <div class="note">Tên công trình tự đặt theo mã đất của ô đất bên dưới (VD <b>CT.AN 01</b>), đánh số từ trên xuống dưới, từ trái sang phải; gõ vào ô tên để đặt tên riêng (xoá trắng để về tên tự động). Chức năng lấy theo loại đất, tầng cao lấy theo bản vẽ. Chạm số thứ tự để chọn công trình trên bản vẽ.</div>
-      <div class="bd-wrap"><table class="hb-tab bd-tab"><thead><tr><th>#</th><th>Tên công trình</th><th>Chức năng</th><th class="n">Tầng cao</th><th>Vật liệu</th><th>Tình trạng</th>${ex.map((k) => `<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>
+      <div class="note">Tên công trình tự đặt theo mã đất của ô đất bên dưới (VD <b>CT.AN 01</b>), đánh số từ trên xuống dưới, từ trái sang phải; gõ vào ô tên để đặt tên riêng (xoá trắng để về tên tự động). Chức năng lấy theo loại đất, tầng cao lấy theo bản vẽ. Chạm số thứ tự để chọn công trình trên bản vẽ. Tích ô cạnh tên cột để dán nhãn trường đó lên công trình (2D và 3D).</div>
+      <div class="bd-wrap"><table class="hb-tab bd-tab"><thead><tr><th>#</th>${[['name', 'Tên công trình'], ['func', 'Chức năng'], ['floors', 'Tầng cao'], ['material', 'Vật liệu'], ['status', 'Tình trạng'], ...ex.map((k) => [k, k])].map(([k, n]) => `<th${k === 'floors' ? ' class="n"' : ''}><label class="bd-lk" title="Tích để dán nhãn trường này lên công trình trên bản vẽ"><input type="checkbox" data-lk="${esc(k)}"${lk.includes(k) ? ' checked' : ''}>${esc(n)}</label></th>`).join('')}</tr></thead><tbody>
       ${rows.map((r, i) => `<tr class="${S.selectedId === r.it.id ? 'sel' : ''}"><td><button class="bd-pick" data-id="${r.it.id}">${i + 1}</button></td>${td(r, 'name', r.it.props.bdata && r.it.props.bdata.name ? r.name : '')}<td>${r.func ? esc(r.func) : '<span class="muted">— chưa nằm trên ô đất —</span>'}</td>${td(r, 'floors', r.floors, 'number')}${td(r, 'material', r.material)}${td(r, 'status', r.status)}${ex.map((k) => td(r, k, r.extra[k])).join('')}</tr>`).join('') || '<tr><td colspan="6" class="muted">Chưa có công trình (lớp Công trình)</td></tr>'}
       </tbody></table></div>
     </div>`;
@@ -4731,6 +4750,12 @@ function renderBData(hud) {
     checkpoint(); const r = rows.find((x) => x.it === it);
     BD.setField(it, inp.dataset.k, inp.dataset.k === 'name' && r && inp.value.trim() === r.auto ? '' : inp.value.trim());
     changed();
+  }));
+  hud.querySelectorAll('input[data-lk]').forEach((cb) => (cb.onchange = () => {
+    checkpoint(); const k = cb.dataset.lk, cur = BD.labelKeys(S.doc).filter((x) => x !== k);
+    const order = ['name', 'func', 'floors', 'material', 'status', ...ex];
+    S.doc.settings.bdLabels = (cb.checked ? [...cur, k] : cur).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    changed(); if (S.mode === '3d' && v3) draw3DOverlay();
   }));
   hud.querySelectorAll('.bd-pick').forEach((b) => (b.onclick = () => { S.multi = []; S.selectedId = b.dataset.id; renderProps(); requestRender(); if (S.mode === '3d') schedule3D(); hud.querySelectorAll('tr.sel').forEach((t) => t.classList.remove('sel')); b.closest('tr').classList.add('sel'); }));
   $('#bdXlsx').onclick = () => exportBData();
@@ -5618,7 +5643,7 @@ async function ensure3D() {
     v3.onRestored = () => { if (S.mode === '3d') { build3D(); toast('Đã dựng lại 3D'); } };
     v3.controls.addEventListener('change', () => { if (S.stroke || S.circleDraft) draw3DOverlay(); });
     // viền mặt khối đang chọn vẽ lại cùng khung hình 3D để bám khối ngay khi xoay, thu phóng
-    { let last = ''; v3.onFrame = () => { if (S.tool !== 'facet' || !S.facetSel) { if (last) { last = ''; draw3DOverlay(); } return; } const k = v3.camera.matrixWorld.elements.join(',') + v3.camera.projectionMatrix.elements[0] + (drag ? drag.pts && drag.pts.length : 0); if (k !== last) { last = k; draw3DOverlay(); } }; }
+    { let last = ''; v3.onFrame = () => { if (BD.labelKeys(S.doc).length && !(S.tool === 'facet' && S.facetSel)) { const k = 'L' + v3.camera.matrixWorld.elements.join(',') + v3.camera.projectionMatrix.elements[0] + S.doc.items.length; if (k !== last) { last = k; draw3DOverlay(); } return; } if (S.tool !== 'facet' || !S.facetSel) { if (last) { last = ''; draw3DOverlay(); } return; } const k = v3.camera.matrixWorld.elements.join(',') + v3.camera.projectionMatrix.elements[0] + (drag ? drag.pts && drag.pts.length : 0); if (k !== last) { last = k; draw3DOverlay(); } }; }
     update3DSun();
   }
   return v3;
