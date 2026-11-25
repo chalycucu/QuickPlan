@@ -580,3 +580,9 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 .hb-grid.lots { grid-template-columns: minmax(200px, 1fr) 2.6fr; }
 @media (max-width: 700px) { .hb-grid.lots { grid-template-columns: 1fr; } }
 .bd-tab .bd-in[data-k="title"], .bd-tab .bd-in[data-k="func"] { min-width: 210px; }
+/* QP-24: hàng trên cùng của hộp công cụ luôn hiện khi cuộn / co kéo hộp */
+.toolopts > .phd { position: sticky; top: 0; z-index: 6; align-self: stretch; display: flex; align-items: center; background: #fff; box-shadow: -5px 0 0 #fff, 5px 0 0 #fff, 0 -8px 0 #fff, 0 6px 0 #fff; }
+.toolopts > .phd.phd-last { flex-grow: 1; }
+.toolopts > .phd.brushes, .toolopts > .phd.seg { display: flex; }
+.toolopts > .pmin { z-index: 7; }
+:is(.props, .pop).pnl:not(.lay-h) > h3, .pop.pnl:not(.lay-h) > div > h3:first-child { position: sticky; top: 0; z-index: 6; background: var(--panel, #fff); }

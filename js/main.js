@@ -1543,7 +1543,8 @@ function renderToolOpts() {
           grid.append(c);
         }
         box.append(grid);
-        requestAnimationFrame(() => { const on = grid.querySelector('.chip.on'); if (on) on.scrollIntoView({ block: 'nearest' }); });
+        // chỉ cuộn trong lưới mã (scrollIntoView cuộn cả hộp thoại, làm mất phần trên)
+        requestAnimationFrame(() => { const on = grid.querySelector('.chip.on'); if (on) { const gt = grid.getBoundingClientRect(), ct = on.getBoundingClientRect(); if (ct.top < gt.top) grid.scrollTop -= gt.top - ct.top + 4; else if (ct.bottom > gt.bottom) grid.scrollTop += ct.bottom - gt.bottom + 4; } });
       }
       { const add = h('<button class="chip add">🎨 Đổi màu / thêm chức năng</button>'); add.onclick = () => openLanduseDialog(o.zone.code); box.append(add); }
       box.append(lbl('Khoảng lùi (m)', numInput(o.zone.setback, (v) => { o.zone.setback = v; saveOpts(); })));
@@ -1666,7 +1667,8 @@ function renderToolOpts() {
   if (S.mode === '3d') hint('Vẽ bằng bút lên mặt đất · ngón tay: xoay/kéo/thu phóng · chuột phải: xoay');
   if (DRAW_TOOLS.has(S.tool) && !penOn()) { const c = h('<button class="chip" data-act="openpen">✎ Kiểu nét, hình, bắt điểm, trục vẽ: mở Cọ vẽ</button>'); c.onclick = () => togglePenBar(true); box.append(c); }
   panelChrome(box, 'opts', (box.querySelector('.title') || {}).textContent || 'Tuỳ chọn công cụ');
-  requestAnimationFrame(fitOpts);
+  if (box.dataset.headTool !== S.tool) { box.dataset.headTool = S.tool; box.scrollTop = 0; } // mở hộp công cụ khác: luôn bắt đầu từ phần trên
+  requestAnimationFrame(fitOpts); requestAnimationFrame(() => markHead(box));
 }
 // bảng tuỳ chọn bên phải: dừng phía trên bảng Chỉ tiêu quy hoạch
 function fitOpts() {
@@ -1837,6 +1839,25 @@ function enableResize(el, key) {
   el.addEventListener('pointerup', end, true); el.addEventListener('pointercancel', end, true);
 }
 const PNL_CTRL = 'button, input, select, textarea, a, label, .seg, [contenteditable], canvas, video, .chip, .lu-row, .lu-pal, .chk-row, [role=button], [onclick], .rzh';
+// QP-24: hàng trên cùng của hộp công cụ (⠿, tên, ✏ Chỉnh sửa, các chế độ) luôn hiện khi cuộn / co kéo hộp
+function markHead(el) {
+  if (!el._phRO && window.ResizeObserver) { let sz = ''; el._phRO = new ResizeObserver(() => { const k = el.clientWidth + 'x' + el.clientHeight; if (k !== sz) { sz = k; requestAnimationFrame(() => markHead(el)); } }); el._phRO.observe(el); }
+  if (!el._phScroll) { el._phScroll = () => { const m = el.querySelector(':scope > .pmin'); if (m) m.style.transform = el.scrollTop ? `translateY(${el.scrollTop}px)` : ''; }; el.addEventListener('scroll', el._phScroll, { passive: true }); } // nút ▾ đi theo hàng trên
+  el._phScroll();
+  el.querySelectorAll(':scope > .phd').forEach((n) => n.classList.remove('phd', 'phd-last'));
+  if (el.classList.contains('collapsed') || el.scrollHeight <= el.clientHeight + 2) return;
+  const st = el.scrollTop; el.scrollTop = 0;
+  const kids = [...el.children].filter((c) => !c.matches('.pmin, .rzh, .preopen') && c.offsetParent !== null && getComputedStyle(c).position !== 'absolute');
+  const row = []; let bottom = -1;
+  for (const c of kids) {
+    if (c.classList.contains('brk')) break;
+    const t = c.offsetTop, b = t + c.offsetHeight;
+    if (row.length && t >= bottom) break;
+    row.push(c); bottom = Math.max(bottom, b);
+  }
+  if (row.length && row.length < kids.length) { row.forEach((c) => c.classList.add('phd')); row[row.length - 1].classList.add('phd-last'); }
+  el.scrollTop = st;
+}
 function panelChrome(el, key, title, host = null) {
   const st = PANEL[key] || (PANEL[key] = {});
   el.classList.add('pnl'); el.dataset.title = title;
@@ -2153,6 +2174,7 @@ function carveOthers(region, keepIds) {
   return removed;
 }
 function zoneStroke(raw, sc, snap) {
+  if (!editOn('zone')) { zoneLockToast(); return true; }
   const o = S.opts.zone; const brush = o.brush || 'basic', form = 'free';
   const pts = raw.map((q) => [q[0], q[1]]);
   if (!snap && (pts.length < 2 || G.length(pts) < 8 / sc)) return false;
@@ -2512,6 +2534,7 @@ function toolDown(e, p, w, sc, in3d = false) {
     case 'road': if (S.tool === 'road' && (S.opts.road.sub || 'type') === 'type' && S.opts.road.fromLine) { drag = { ...base, kind: 'tap' }; return; } // tạo đường theo nét / cắt đường: chạm
     // fallthrough: vẽ tuyến mới
     default:
+      if (S.tool === 'zone' && !editOn('zone')) { zoneLockToast(); return; } // QP-24: chưa tích ✏ Chỉnh sửa thì không phủ
       drag = { ...base, kind: 'stroke', tapFill: S.tool === 'zone' || S.tool === 'face' || S.tool === 'cover', lastP: p };
       if (S.tool === 'face') { drag.parent = (in3d && e.hitId) || (topBuildingAt(w) || {}).id || null; if (in3d) drag.planeH = e.planeH; }
       S.stroke = { pts: [[w[0], w[1], e.pressure || 0.5]], screen: [p], snap: null, sc };
@@ -2950,7 +2973,11 @@ function closedWallsAt(w) {
   }
   return out;
 }
+// QP-24: phủ SDĐ chỉ khi hộp SDĐ đang bật «✏ Chỉnh sửa»
+let zoneLockAt = 0;
+function zoneLockToast() { if (Date.now() - zoneLockAt < 1500) return; zoneLockAt = Date.now(); toast('Chưa bật «✏ Chỉnh sửa» trong hộp SDĐ: tích ô Chỉnh sửa để phủ màu sử dụng đất'); }
 function tapZone(w, code = S.opts.zone.code) {
+  if (!editOn('zone')) { zoneLockToast(); return; }
   const lu = M.LANDUSE[code];
   const z = S.doc.items.filter((i) => i.kind === 'zone').reverse().find((i) => G.pointInPolygon(w, i.pts) && !(i.holes || []).some((hh) => G.pointInPolygon(w, hh)));
   if (z) {
