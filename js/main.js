@@ -584,6 +584,8 @@ function openToolGroup(btn, g) {
     box.append(b);
   }
   document.body.append(box);
+  // QP-25: đặt hộp sao cho hiện hết các nút (không bị mép dưới màn hình che)
+  { const H = box.offsetHeight, top = Math.max(8, Math.min(r.top - 8, innerHeight - H - 8)); box.style.top = top + 'px'; if (H > innerHeight - 16) { box.style.maxHeight = (innerHeight - 16) + 'px'; box.style.overflowY = 'auto'; } }
   const off = (e) => { if (!document.body.contains(box)) { document.removeEventListener('pointerdown', off, true); return; } if (!box.contains(e.target) && e.target.closest('.tool') !== btn) { closeToolGroup(); document.removeEventListener('pointerdown', off, true); } };
   setTimeout(() => document.addEventListener('pointerdown', off, true), 0);
 }
@@ -829,7 +831,7 @@ function syncPenBar() {
   if (p.op === 'polyclose') bar.append(lbl('Khép hở ≤ (m)', stepper(gapTol(), 0.05, 0.1, (v) => { S.opts.fillGap = { ...(S.opts.fillGap || {}), on: true, tol: Math.max(0, v) }; saveOpts(); })));
   if (p.op === 'extrude') {
     if (S.mode === '3d') { const sg = h('<div class="seg"></div>'), pm = (S.opts.push && S.opts.push.mode) || 'pos'; for (const [k, n] of [['pos', '＋ Đùn ra'], ['neg', '－ Ấn lõm']]) { const b = h(`<button class="${pm === k ? 'on' : ''}">${n}</button>`); b.onclick = () => { S.opts.push = { ...(S.opts.push || {}), mode: k }; saveOpts(); syncPenBar(); }; sg.append(b); } bar.append(sg); }
-    else bar.append(lbl('Cao (m)', stepper(p.H ?? 10, 0.5, 1, (v) => { p.H = v; saveOpts(); })));
+    else bar.append(lbl('Cao (m, âm = đùn xuống)', stepper(p.H ?? 10, -300, 1, (v) => { p.H = v || 0.5; saveOpts(); })));
   }
   const step = penStep(); if (step) bar.append(h(`<span class="pstep">${step}</span>`));
   if ((p.op === 'trim' && S.penLim) || (p.op === 'join' && S.penJoin) || (p.op === 'offset' && S.penOff) || ((p.op === 'rotate' || p.op === 'copy') && S.penXf)) { const r = h('<button class="chip">↺ Chọn lại</button>'); r.onclick = () => { penReset(); syncPenBar(); requestRender(); }; bar.append(r); }
@@ -839,6 +841,19 @@ function syncPenBar() {
   const fd = h(`<button class="chip ${S.opts.fingerDraw ? 'on' : ''}" title="Khi không có Apple Pencil">✋ Ngón tay</button>`);
   fd.onclick = () => { S.opts.fingerDraw = !S.opts.fingerDraw; saveOpts(); syncPenBar(); toast(S.opts.fingerDraw ? 'Ngón tay dùng để vẽ · dùng 2 ngón để di chuyển' : 'Ngón tay dùng để di chuyển · vẽ bằng bút'); };
   bar.append(fd);
+  { // QP-25: chọn mặt, khóa khối / mặt, nhìn thẳng mặt ngay trên Cọ vẽ
+    const g3 = h('<div class="pgrp pg-face"></div>'), tb = lockTarget();
+    const sf = h(`<button class="chip ${S.mode === '3d' && S.tool === 'facet' && !p.op ? 'on' : ''}" title="Chạm mái hoặc mặt đứng của khối để chọn mặt">▣ Chọn mặt</button>`);
+    sf.onclick = () => { const go = () => { leaveCmdTool(); p.op = null; saveOpts(); pickTool('selface'); syncPenBar(); toast('Chọn mặt: chạm mái hoặc mặt đứng của khối · rồi vẽ trên mặt bằng Cọ vẽ'); }; if (S.mode !== '3d') setMode('3d').then(go); else go(); };
+    const kb = h(`<label class="chk ${tb ? '' : 'dis'}" title="${tb ? 'Chỉ thao tác trên khối này' : 'Chọn một khối trước'}"><input type="checkbox" ${S.iso ? 'checked' : ''} ${tb || S.iso ? '' : 'disabled'}> 🔒 Khóa khối</label>`);
+    kb.querySelector('input').onchange = (e) => { setIso(e.target.checked && tb ? tb.id : null); syncPenBar(); };
+    const mb = h(`<label class="chk ${S.facetSel ? '' : 'dis'}" title="${S.facetSel ? 'Chỉ thao tác trên mặt đang chọn' : 'Chọn một mặt trước'}"><input type="checkbox" ${S.isoFace && S.facetSel ? 'checked' : ''} ${S.facetSel ? '' : 'disabled'}> ▣ Khóa mặt</label>`);
+    mb.querySelector('input').onchange = (e) => { setIsoFace(e.target.checked); syncPenBar(); };
+    const lb = lookBtn(), lo = lb.onclick;
+    lb.onclick = () => { if (!S.facetSel && !S.lookLock) { toast('Chọn một mặt trước (▣ Chọn mặt)'); return; } lo(); syncPenBar(); };
+    g3.append(sf, kb, mb, lb);
+    bar.append(h('<span class="psep"></span>'), g3);
+  }
   const tg = penTarget(); if (tg) bar.append(h(`<span class="ptarget" title="Nét vẽ thành đối tượng của lớp này">→ ${tg}</span>`));
   const x = h('<button class="pb px" title="Tắt Cọ vẽ" aria-label="Tắt Cọ vẽ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'); x.onclick = () => togglePenBar(false); bar.append(x);
   if (p.axis) { const ar = axisRow('pen'); ar.classList.add('pen-axis'); bar.append(ar); }
@@ -849,7 +864,8 @@ const OP_HINT = {
   trim: 'Cắt: ① chạm đối tượng làm giới hạn (nét đỏ) → ② chạm đối tượng cần cắt → ③ chạm vào miền cần cắt bỏ',
   join: 'Bán kính cong: nhập R, chạm đường thẳng / đường cong thứ nhất rồi thứ hai: tạo cung tròn R nối hai đối tượng (như lệnh Fillet)',
   offset: 'Offset: nhập khoảng cách, chạm đối tượng cần offset, rồi chạm vào phía muốn đặt bản offset',
-  extrude: 'Extrude khối: 2D: nhập chiều cao, chạm vào một hình khép kín để dựng thành khối (chạm công trình để đổi chiều cao) · 3D: kéo mặt khối / mảng lên xuống',
+  extrude: 'Extrude: nhập chiều cao (âm = đùn xuống) rồi chạm vào mặt / hình khép kín, hoặc nhấn vào mặt rồi kéo bút lên (đùn ra) / xuống (đùn ngược) · 3D: kéo mặt khối, mảng hoặc mặt phẳng',
+  mkface: 'Tạo mặt: chạm vào trong một đa giác kín (hoặc vùng kín do các nét rời tạo thành, hoặc mái khối) để biến nó thành mặt phẳng · rồi dùng Extrude để đùn mặt thành khối',
   fillet: 'Bo tròn: chạm vào góc (đỉnh) của đối tượng, hoặc vào góc giao lộ đường, để bo theo bán kính R',
   chamfer: 'Vát góc: chạm vào góc (đỉnh) của đối tượng, hoặc vào góc giao lộ (vát vỉa hè), để vát theo khoảng đã nhập',
   rotate: 'Xoay: ① chạm đối tượng (hoặc chọn nhiều trước) → ② chạm tâm xoay → ③ kéo để xoay, chạm vào hướng mới, hoặc nhập góc rồi bấm Xoay',
@@ -880,6 +896,7 @@ function penTap(op, w, sc) {
   if (op === 'join') return penJoin(w, sc);
   if (op === 'offset') return penOffset(w, sc);
   if (op === 'extrude') return penExtrude(w, sc);
+  if (op === 'mkface') return penMakeFace(w, sc);
   return penCorner(op, w, sc);
 }
 // ---- Xoay / Copy (QP-23) ----
@@ -1135,27 +1152,106 @@ function penOffset(w, sc) {
   checkpoint(); S.doc.items.push(it); changed(); syncPenBar();
   toast(`Đã offset ${G.fmtNum(D)} m · chạm đối tượng khác để offset tiếp`);
 }
-// ---- Extrude khối (2D): hình khép kín -> công trình cao H ----
+// ---- Extrude khối (2D): mặt phẳng / hình khép kín -> khối đặc cao H (H âm: đùn xuống dưới) ----
+const ringOfPen = (i) => { if (i.kind === 'plane' || isClosedItem(i)) return i.pts.map((q) => [q[0], q[1]]); if ((i.kind === 'sketch' || i.kind === 'cad') && i.pts.length > 3 && G.dist(i.pts[0], i.pts[i.pts.length - 1]) < 1e-6) return i.pts.slice(0, -1).map((q) => [q[0], q[1]]); return null; };
+const solidH = (b) => (b.props.floors || 1) * (b.props.floorH || 3.3);
+// dựng / đổi chiều cao khối đặc từ đối tượng hit; trả về khối
+function extrudeTarget(hit, H) {
+  if (hit.kind === 'building') {
+    const top = (hit.props.dz || 0) + (hit.props.down ? solidH(hit) : 0); // giữ mặt gốc khi đổi chiều đùn
+    const h = M.setSolidHeight(hit, H);
+    hit.props.down = H < 0 || undefined; hit.props.dz = H < 0 ? top - h : top || undefined;
+    if (!hit.props.dz) delete hit.props.dz; if (!hit.props.down) delete hit.props.down;
+    return hit;
+  }
+  const b = newItem('building', ringOfPen(hit), {});
+  if (hit.kind === 'plane') { if (hit.props.on) b.props.on = hit.props.on; if (hit.props.dz) b.props.dz = hit.props.dz; S.doc.items = S.doc.items.filter((i) => i !== hit); }
+  S.doc.items.push(b);
+  return extrudeTarget(b, H);
+}
 function penExtrude(w, sc) {
-  const H = S.opts.pen.H ?? 10;
-  const ringOf = (i) => { if (isClosedItem(i)) return i.pts.map((q) => [q[0], q[1]]); if ((i.kind === 'sketch' || i.kind === 'cad') && i.pts.length > 3 && G.dist(i.pts[0], i.pts[i.pts.length - 1]) < 1e-6) return i.pts.slice(0, -1).map((q) => [q[0], q[1]]); return null; };
+  const H = S.opts.pen.H || 10;
   if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Extrude'); return; }
-  const hit = pickFor(w, sc, (i) => !!ringOf(i), false);
-  if (!hit) { toast('Chạm vào một hình khép kín (nét vẽ khép kín, ô đất, vật liệu phủ…) hoặc một công trình'); return; }
+  const hit = pickFor(w, sc, (i) => !!ringOfPen(i), false);
+  if (!hit) { toast('Chạm vào một mặt (Tạo mặt), hình khép kín (nét vẽ khép kín, ô đất, vật liệu phủ…) hoặc một công trình'); return; }
   if (M.isLocked(S.doc, hit)) { lockedToast(); return; }
-  const floors = Math.max(1, Math.round(H / 3.3)), floorH = +(H / floors).toFixed(3);
   checkpoint();
-  if (hit.kind === 'building') { hit.props.floors = floors; hit.props.floorH = floorH; changed(); toast(`Công trình cao ${G.fmtNum(H)} m (${floors} tầng)`); return; }
-  const b = newItem('building', ringOf(hit), { floors, floorH });
-  S.doc.items.push(b); S.selectedId = b.id; changed(); renderProps();
-  toast(`Đã extrude thành khối cao ${G.fmtNum(H)} m (${floors} tầng) · bật 3D để xem`);
+  if (hit.kind === 'building' && !hit.props.solid && H > 0) { const floors = Math.max(1, Math.round(H / 3.3)); hit.props.floors = floors; hit.props.floorH = +(H / floors).toFixed(3); changed(); toast(`Công trình cao ${G.fmtNum(H)} m (${floors} tầng)`); return; }
+  const b = extrudeTarget(hit, H);
+  S.selectedId = b.id; changed(); renderProps();
+  toast(`Đã extrude ${H < 0 ? 'xuống ' : ''}${G.fmtNum(Math.abs(H))} m · bật 3D để xem`);
+}
+// kéo bút để đùn (2D): bắt đầu khi bút đi quá vài điểm ảnh; lên = đùn ra, xuống = đùn ngược
+function penExtDrag(e) {
+  const d = drag; if (d.dead) return;
+  if (!d.moved) {
+    if (Math.abs(d.y - e.clientY) < 8) return;
+    if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Extrude'); d.dead = true; return; }
+    const hit = pickFor(d.startW, d.sc, (i) => !!ringOfPen(i), false);
+    if (!hit) { toast('Nhấn vào một mặt hoặc hình khép kín rồi kéo bút lên / xuống'); d.dead = true; return; }
+    if (M.isLocked(S.doc, hit)) { lockedToast(); d.dead = true; return; }
+    d.snap = snapItems(); d.y = e.clientY; d.moved = true;
+    if (hit.kind === 'building' && !hit.props.solid) { d.floorsOf = hit.id; d.f0 = hit.props.floors || 1; d.id = hit.id; }
+    else {
+      const h0 = hit.kind === 'building' ? (hit.props.down ? -solidH(hit) : solidH(hit)) : 0;
+      const b = extrudeTarget(hit, h0 || 0.5);
+      d.id = b.id; d.h0 = h0;
+    }
+    S.selectedId = d.id; renderProps();
+  }
+  const b = S.doc.items.find((i) => i.id === d.id); if (!b) return;
+  if (d.floorsOf) { // công trình thường: kéo đổi số tầng như Kéo khối
+    const f = Math.max(1, Math.round(d.f0 + (d.y - e.clientY) / 12));
+    if (f !== b.props.floors) { b.props.floors = f; toast(`${f} tầng · cao ${G.fmtNum(f * (b.props.floorH || 3.3))} m`); changed({ save: false, light: true }); }
+    return;
+  }
+  let H = Math.round((d.h0 + (d.y - e.clientY) / Math.max(1.5, Math.min(d.sc || 4, 10))) * 2) / 2;
+  if (Math.abs(H) < 0.5) H = H < 0 ? -0.5 : 0.5;
+  const cur = b.props.down ? -solidH(b) : solidH(b);
+  if (Math.abs(H - cur) > 1e-6) { extrudeTarget(b, H); toast(H < 0 ? `Đùn xuống ${G.fmtNum(-H)} m` : `Đùn lên ${G.fmtNum(H)} m`); changed({ save: false, light: true }); }
+}
+// 3D (Kéo mặt) với khối đặc: chiều cao liên tục theo bước 0,5 m
+function solidDrag3D(it, e) {
+  const sc = Math.max(1.5, Math.min(drag.sc || 4, 10));
+  let H = Math.max(0.5, Math.round(((drag.h0 ?? solidH(it)) + (drag.y - e.clientY) / sc) * 2) / 2);
+  if (Math.abs(H - solidH(it)) > 1e-6) { extrudeTarget(it, it.props.down ? -H : H); drag.moved = true; toast(`Khối cao ${G.fmtNum(H)} m`); changed({ save: false, light: true }); }
+}
+// ---- Tạo mặt (QP-25): đa giác kín / vùng kín do nét rời tạo thành / mái khối -> mặt phẳng chờ Extrude ----
+function penMakeFace(w, sc) {
+  if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Tạo mặt'); return; }
+  const old = S.doc.items.find((i) => i.kind === 'plane' && G.pointInPolygon(w, i.pts));
+  if (old) { S.selectedId = old.id; renderProps(); requestRender(); toast('Đã có mặt ở đây · chọn Extrude rồi chạm / kéo mặt để đùn'); return; }
+  let ring = null, best = Infinity;
+  for (const it of M.liveItems(S.doc)) {
+    if (['zone', 'road', 'junction', 'facet', 'plane', 'building'].includes(it.kind) || !inIso(it) || !it.pts) continue;
+    const r = ringOfPen(it); if (!r || r.length < 3 || !G.pointInPolygon(w, r)) continue;
+    const a = Math.abs(G.area(r)); if (a < best) { best = a; ring = r; }
+  }
+  const host = topBuildingAt(w);
+  if (!ring) { // vùng kín do các nét rời (nét vẽ, nét CAD, mũi tên…) tạo thành
+    const vis = Object.fromEntries(S.doc.layers.map((l) => [l.id, l.visible && l.opacity > 0])), R = 400;
+    const walls = closedWallsAt(w);
+    for (const it of M.liveItems(S.doc)) {
+      if (!['sketch', 'cad', 'arrow', 'flow', 'land'].includes(it.kind) || vis[M.layerOf(it)] === false || !inIso(it) || !it.pts || it.pts.length < 2) continue;
+      const bb = G.bbox(it.pts); if (bb.x1 < w[0] - R || bb.x0 > w[0] + R || bb.y1 < w[1] - R || bb.y0 > w[1] + R) continue;
+      walls.push(it.pts.map((q) => [q[0], q[1]]));
+    }
+    const poly = fillRegionAt(S.doc, w, walls, { gap: gapTol() }); if (poly && poly.length >= 3) ring = poly.map((q) => [q[0], q[1]]);
+  }
+  if (!ring && host) ring = host.pts.map((q) => [q[0], q[1]]);
+  if (!ring) { toast('Chỗ chạm chưa nằm trong đa giác kín hay vùng kín nào'); return; }
+  const props = {};
+  if (host && G.pointInPolygon(G.centroid(ring), host.pts)) props.on = host.id;
+  const it = newItem('plane', ring, props);
+  checkpoint(); S.doc.items.push(it); S.selectedId = it.id; changed(); renderProps();
+  toast(`Đã tạo mặt ${G.fmtArea(Math.abs(G.area(ring)))}${props.on ? ' trên mái khối' : ''} · chọn Extrude rồi chạm mặt (theo chiều cao đã nhập) hoặc nhấn mặt và kéo bút để đùn`);
 }
 // 3D: lệnh Extrude dùng công cụ Kéo mặt; bỏ lệnh thì về Sửa mặt
 function syncPen3DTool() {
   if (!S.doc) return;
   const keep = { sel: S.facetSel, iso: S.isoFace }, back = () => { S.facetSel = keep.sel; S.isoFace = keep.iso; syncIsoBar(); renderToolOpts(); };
   if (penOn() && S.opts.pen.op === 'extrude' && S.mode === '3d' && S.tool !== 'push') { S.penPushFrom = S.tool; setTool('push'); back(); }
-  else if (S.tool === 'push' && S.penPushFrom && !(penOn() && S.opts.pen.op === 'extrude')) { const t = S.penPushFrom; S.penPushFrom = null; setTool(t === 'facet' ? 'selface' : t); back(); }
+  else if (S.tool === 'push' && S.penPushFrom && !(penOn() && S.opts.pen.op === 'extrude' && S.mode === '3d')) { const t = S.penPushFrom; S.penPushFrom = null; setTool(t === 'facet' ? 'selface' : t); back(); }
 }
 // đỉnh gần điểm chạm nhất (mọi đối tượng có góc)
 function nearestCorner(w, sc) {
@@ -1560,8 +1656,10 @@ function renderToolOpts() {
     }
     case 'land': {
       title('Cọ cảnh quan');
+      if (o.land.style === 'plaza') o.land.style = 'lawn'; // QP-25: bỏ nút Sân lát (bản vẽ cũ vẫn hiện)
       const st = o.land.style || 'row';
       for (const [k, L] of Object.entries(M.LAND_STYLES)) {
+        if (k === 'plaza') continue;
         const c = h(`<button class="chip ${st === k ? 'on' : ''}" ${M.LAND_CLOSED[k] ? 'style="touch-action:none"' : ''}>${M.LAND_CLOSED[k] ? '<span class="sw" style="background:' + M.LAND_COLORS[k] + '"></span>' : ''}${L.name}</button>`);
         if (M.LAND_CLOSED[k]) landChipDrag(c, k); else c.onclick = () => { o.land.style = k; saveOpts(); renderToolOpts(); };
         box.append(c);
@@ -1978,42 +2076,76 @@ function startJunctionPick() {
 }
 function openJunctionDialog(j) {
   const c = j.pts[0];
-  openPop(`<div style="width:min(440px,86vw)"><h3>Góc vát, bán kính giao lộ</h3>
-    <div class="note">V: góc vát vỉa hè (m) · R: bán kính bó vỉa lòng đường (m). Ô ở tâm: áp dụng cho mọi góc. Ô ở góc: chỉ góc đó.</div>
-    <div class="jx-stage"><canvas></canvas></div></div>`, (pop) => {
-    const stage = pop.querySelector('.jx-stage'), cv = stage.querySelector('canvas');
-    const W = stage.clientWidth || 400, H = W;
+  const arms0 = RO.junctionArms(S.doc, c);
+  const icV = '<svg viewBox="0 0 24 24"><path d="M4 20V10l6-6h10"/><path d="M4 10h6V4" stroke-dasharray="2 2"/></svg>';
+  const icR = '<svg viewBox="0 0 24 24"><path d="M4 20v-7a9 9 0 0 1 9-9h7"/><path d="M13 13L4 4" stroke-dasharray="2 2"/></svg>';
+  openPop(`<div class="jx-dlg"><h3>Góc vát, bán kính giao lộ</h3>
+    <div class="jx-sub"><span class="jx-tag">Giao lộ ${arms0.length} nhánh</span><span class="jx-leg"><i class="v">${icV}</i><b>V</b> vát góc vỉa hè</span><span class="jx-leg"><i class="r">${icR}</i><b>R</b> bán kính bó vỉa</span></div>
+    <div class="jx-stage"><canvas></canvas><svg class="jx-ov"></svg></div>
+    <div class="jx-quick"><span>Áp dụng nhanh cho mọi góc</span>
+      <div class="jx-qrow"><b class="r">R</b>${[0, 5, 8, 10, 12, 15].map((x) => `<button class="jx-q" data-f="R" data-v="${x}">${x}</button>`).join('')}<small>m</small></div>
+      <div class="jx-qrow"><b class="v">V</b>${[0, 2, 3, 5, 7, 10].map((x) => `<button class="jx-q" data-f="V" data-v="${x}">${x}</button>`).join('')}<small>m</small></div></div>
+    <div class="jx-foot"><span class="muted">Ô giữa áp dụng cho mọi góc; ô từng góc chỉ đổi góc đó (ghi đè ô giữa).</span><button class="btn" id="jxReset">Đặt lại</button><button class="btn primary" id="jxDone">Xong</button></div></div>`, (pop) => {
+    const stage = pop.querySelector('.jx-stage'), cv = stage.querySelector('canvas'), ov = stage.querySelector('.jx-ov');
+    const W = stage.clientWidth || 480, H = stage.clientHeight || Math.round(W * 0.8);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ov.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const arms = RO.junctionArms(S.doc, c), ht = Math.max(8, ...arms.map((a) => a.ht));
-    const v = new View(); Object.assign(v, { cx: c[0], cy: c[1], rot: S.view.rot || 0, w: W, h: H, scale: W / (ht * 5.2) });
-    const draw = () => { const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = '#f4f1ea'; x.fillRect(0, 0, W, H); renderScene(x, S.doc, v, { ...sceneOpts(), selectedId: null, multiIds: [] }); };
+    const v = new View(); Object.assign(v, { cx: c[0], cy: c[1], rot: S.view.rot || 0, w: W, h: H, scale: Math.min(W, H) / (ht * 3.6) });
+    const draw = () => {
+      const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = '#f4f1ea'; x.fillRect(0, 0, W, H);
+      try { renderScene(x, S.doc, v, { ...sceneOpts(), selectedId: null, multiIds: [] }); } catch (err) { console.error(err); }
+      // làm dịu nền để các ô nhập nổi lên
+      const g = x.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.75);
+      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(241,245,249,.55)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    };
     const commit = (fn) => {
       checkpoint();
       if (j._new) { delete j._new; Object.assign(j, newItem('junction', [c.slice()], j.props)); S.doc.items.push(j); }
       fn(j.props); carveJunction(j); changed(); draw(); place();
     };
-    const circ = (pos, val, onSet, center) => {
-      const el = h(`<div class="jx-c ${center ? 'center' : ''}" style="left:${pos[0]}px;top:${pos[1]}px"><label>V: <input inputmode="decimal" class="jv" value="${G.fmtNum(val.V)}">m</label><span class="jx-hr"></span><label>R: <input inputmode="decimal" class="jr" value="${G.fmtNum(val.R)}">m</label></div>`);
+    const setAll = (f, x) => commit((p) => { p[f] = x; p.cs = (p.cs || []).map((q) => ({ ...q, [f]: undefined })).filter((q) => q.V != null || q.R != null); });
+    const fmt = (x) => (x ? G.fmtNum(x) : '0');
+    const card = (pos, val, onSet, title, kind) => {
+      const el = h(`<div class="jx-c ${kind}" style="left:${pos[0]}px;top:${pos[1]}px"><div class="jx-h">${title}</div>
+        <label class="jx-f"><i class="v">${icV}</i><span>V</span><input inputmode="decimal" class="jv" value="${fmt(val.V)}"><em>m</em></label>
+        <label class="jx-f"><i class="r">${icR}</i><span>R</span><input inputmode="decimal" class="jr" value="${fmt(val.R)}"><em>m</em></label></div>`);
       const rd = (inp) => Math.max(0, parseFloat(inp.value.replace(',', '.')) || 0);
+      for (const inp of el.querySelectorAll('input')) { inp.onfocus = () => inp.select(); inp.onkeydown = (e) => { if (e.key === 'Enter') inp.blur(); }; }
       el.querySelector('.jv').onchange = (e) => onSet('V', rd(e.target));
       el.querySelector('.jr').onchange = (e) => onSet('R', rd(e.target));
       stage.append(el);
+      return el;
     };
     const place = () => {
       stage.querySelectorAll('.jx-c').forEach((e) => e.remove());
-      circ(v.toScreen(c), { V: j.props.V || 0, R: j.props.R || 0 }, (f, x) => commit((p) => { p[f] = x; p.cs = (p.cs || []).map((q) => ({ ...q, [f]: undefined })).filter((q) => q.V != null || q.R != null); }), true);
-      for (const cor of RO.junctionCorners(S.doc, j)) {
-        const d = Math.max(ht * 1.25, 10), q = v.toScreen([c[0] + cor.bis[0] * d * 1.35, c[1] + cor.bis[1] * d * 1.35]);
-        const k = [Math.min(W - 52, Math.max(52, q[0])), Math.min(H - 52, Math.max(52, q[1]))];
-        circ(k, { V: cor.V, R: cor.R }, (f, x) => commit((p) => {
+      const cs = RO.junctionCorners(S.doc, j), sc = v.toScreen(c);
+      let svg = '';
+      const CW = 112, CH = 92, m = 8;
+      cs.forEach((cor, k) => {
+        const q = v.toScreen(cor.Q), dir = [q[0] - sc[0], q[1] - sc[1]], L = Math.hypot(dir[0], dir[1]) || 1;
+        // ô đặt trên phân giác, đẩy ra góc khung
+        let px = sc[0] + (dir[0] / L) * Math.max(W, H), py = sc[1] + (dir[1] / L) * Math.max(W, H);
+        px = Math.min(W - CW / 2 - m, Math.max(CW / 2 + m, px)); py = Math.min(H - CH / 2 - m, Math.max(CH / 2 + m, py));
+        const own = (j.props.cs || []).some((y) => Math.abs(Math.atan2(Math.sin(y.ang - cor.bisAng), Math.cos(y.ang - cor.bisAng))) < 0.35 && (y.V != null || y.R != null));
+        svg += `<line x1="${px}" y1="${py}" x2="${q[0]}" y2="${q[1]}" class="jx-ld"/><circle cx="${q[0]}" cy="${q[1]}" r="4.5" class="jx-pt${own ? ' own' : ''}"/>`;
+        if (cor.curb) svg += `<polyline points="${cor.curb.map((t) => v.toScreen(t).join(',')).join(' ')}" class="jx-arc"/>`;
+        if (cor.chamfer) svg += `<polyline points="${[cor.chamfer[1], cor.chamfer[2]].map((t) => v.toScreen(t).join(',')).join(' ')}" class="jx-ch"/>`;
+        card([px, py], { V: cor.V, R: cor.R }, (f, x) => commit((p) => {
           p.cs = p.cs || [];
           let e = p.cs.find((y) => Math.abs(Math.atan2(Math.sin(y.ang - cor.bisAng), Math.cos(y.ang - cor.bisAng))) < 0.35);
           if (!e) { e = { ang: cor.bisAng }; p.cs.push(e); }
           e[f] = x;
-        }));
-      }
+        }), `<b>${k + 1}</b>Góc ${k + 1}${own ? '<small>riêng</small>' : ''}`, own ? 'own' : '');
+      });
+      ov.innerHTML = svg;
+      card(sc, { V: j.props.V || 0, R: j.props.R || 0 }, setAll, '<b>✱</b>Mọi góc', 'center');
+      pop.querySelectorAll('.jx-q').forEach((b) => b.classList.toggle('on', +b.dataset.v === (+j.props[b.dataset.f] || 0)));
     };
+    pop.querySelectorAll('.jx-q').forEach((b) => (b.onclick = () => setAll(b.dataset.f, +b.dataset.v)));
+    pop.querySelector('#jxReset').onclick = () => commit((p) => { p.V = 0; p.R = 0; p.cs = []; });
+    pop.querySelector('#jxDone').onclick = () => closePop();
     draw(); place();
   });
 }
@@ -2437,7 +2569,8 @@ function toolDown(e, p, w, sc, in3d = false) {
   const op = penOp();
   if (op === 'polyclose') { if (in3d || !w) { toast('Tạo đa giác kín dùng trong chế độ 2D'); return; } drag = { ...base, kind: 'pcbox', cx0: e.clientX, cy0: e.clientY, cx1: e.clientX, cy1: e.clientY }; return; }
   if (op === 'rotate' && S.penXf && S.penXf.base && w) { const list = xfList(S.penXf.ids); drag = { ...base, kind: 'penrot', list: list.map((i) => [i, JSON.stringify(i)]), snap: snapItems(), a0: Math.atan2(w[1] - S.penXf.base[1], w[0] - S.penXf.base[0]) }; return; }
-  if (op && op !== 'erase') { drag = { ...base, kind: 'tap', penOp: op }; return; }
+  if (op === 'extrude' && !in3d && w) { drag = { ...base, kind: 'penext', penOp: op, y: e.clientY }; return; }
+  if (op && op !== 'erase' && !(op === 'extrude' && in3d && S.tool === 'push')) { drag = { ...base, kind: 'tap', penOp: op }; return; }
   if (S.tool === 'measure' && !op) { if (w) measureDown(base, w, sc); return; }
   if (penOn() && !op && (penShape() ? !penLayerTool() : DRAW_TOOLS.has(S.tool) && !penLayerTool())) { // Cọ vẽ khi không có lớp vẽ (hoặc lớp chưa tích Chỉnh sửa): nét vào Cọ nháp
     drag = { ...base, kind: 'stroke', lastP: p, asTool: 'sketch' };
@@ -2502,6 +2635,13 @@ function toolDown(e, p, w, sc, in3d = false) {
     case 'push': {
       let hit = (in3d && e.hitId && S.doc.items.find((i) => i.id === e.hitId)) || topBuildingAt(w);
       const negMode = S.opts.push && S.opts.push.mode === 'neg';
+      if (hit && hit.kind === 'plane') { // QP-25: kéo mặt phẳng thành khối đặc (Ấn lõm: đùn xuống)
+        if (M.isLocked(S.doc, hit)) { lockedToast(); return; }
+        const snap0 = snapItems(), b = extrudeTarget(hit, negMode ? -0.5 : 0.5);
+        S.selectedId = b.id; renderProps(); if (in3d) schedule3D();
+        drag = { ...base, kind: 'extrude', id: b.id, y: e.clientY, h0: 0, snap: snap0, moved: true };
+        return;
+      }
       if (in3d && hit && S.isoFace && S.facetSel && !inIsoFace(hit) && hit.id !== S.facetSel.parent) { toast('Đang «Khóa mặt»: chỉ kéo được mặt đang chọn và các mảng của nó'); return; }
       if (negMode && !in3d) { toast('Kéo âm dùng trong chế độ 3D: nhấn vào mặt khối cần ấn lõm'); return; }
       if (negMode && hit && (hit.kind === 'building' || (hit.kind === 'facet' && Math.abs(hit.props.depth || 0) > 0.05))) { // kéo âm một mặt: mặt chưa chia thì tạo một mảng phủ kín mặt
@@ -2527,7 +2667,7 @@ function toolDown(e, p, w, sc, in3d = false) {
       if (!hit) { toast('Nhấn vào một công trình rồi kéo lên / xuống'); return; }
       if (M.isLocked(S.doc, hit)) { lockedToast(); return; }
       S.selectedId = hit.id; renderProps(); requestRender(); if (in3d) schedule3D();
-      drag = { ...base, kind: 'extrude', id: hit.id, y: e.clientY, floors: hit.props.floors, d0: hit.props.depth || 0, snap: snapItems() };
+      drag = { ...base, kind: 'extrude', id: hit.id, y: e.clientY, floors: hit.props.floors, d0: hit.props.depth || 0, h0: hit.props.solid ? solidH(hit) : undefined, snap: snapItems() };
       return;
     }
     case 'circle': S.circleDraft = { c: w, r: S.opts.circle.radius }; drag = { ...base, kind: 'circle' }; redrawLive(); return;
@@ -2594,10 +2734,12 @@ function toolMove(e, p, w, samples) {
     redrawLive();
     return;
   }
+  if (drag.kind === 'penext') { penExtDrag(e); return; }
   const it = drag.id && S.doc.items.find((i) => i.id === drag.id);
   if (drag.kind === 'extrude') {
     if (!it) return;
     if (it.kind === 'facet') { facetDepthDrag(it, e); return; }
+    if (it.props.solid) { solidDrag3D(it, e); return; }
     const f = Math.max(1, Math.round(drag.floors + (drag.y - e.clientY) / 12));
     if (f !== it.props.floors) { it.props.floors = f; drag.moved = true; toast(`${f} tầng · cao ${G.fmtNum(f * (it.props.floorH || 3.3))} m`); changed({ save: false, light: true }); }
     return;
@@ -2735,6 +2877,7 @@ function toolUp(e, p, w, cancelled) {
       break;
     case 'gmove': if (d.moved) { S.undo.push(d.snap); S.redo = []; changed(); } break;
     case 'measure': measureUp(tap); break;
+    case 'penext': if (!d.moved) { if (tap) penTap('extrude', d.startW, d.sc); } else if (!d.dead) { S.undo.push(d.snap); S.redo = []; changed(); renderProps(); const b = S.doc.items.find((i) => i.id === d.id); if (b && !d.floorsOf) toast(`Đã extrude ${b.props.down ? 'xuống ' : ''}${G.fmtNum(solidH(b))} m`); } break;
     case 'tap': if (tap && d.penOp) { penTap(d.penOp, d.startW, d.sc); break; } if (tap) { if (S.tool === 'icon') placeIcon(d.startW); else if (S.tool === 'autolay') autoLayAt(d.startW); else if (S.tool === 'road') roadTap(d.startW, d.sc); else placePreset(d.startW); } break;
     case 'circle': {
       const it = newItem('circle', [S.circleDraft.c], { radius: S.circleDraft.r, label: '', color: S.opts.circle.color, width: S.opts.circle.width });
@@ -3101,7 +3244,7 @@ function bind3DInput(v) {
       touch3d.add(e.pointerId);
       tap3d = touch3d.size === 1 ? { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() } : null;
       // Vẽ bằng ngón tay: 1 ngón vẽ; ngón thứ 2 chạm vào thì huỷ nét và chuyển sang xoay
-      const pushHit = (S.tool === 'push' || S.tool === 'facet') && touch3d.size === 1 && v.pickBuilding(e.clientX, e.clientY);
+      const pushHit = (S.tool === 'push' || S.tool === 'facet') && touch3d.size === 1 && (v.pickBuilding(e.clientX, e.clientY) || (S.tool === 'push' && v.pickPlane(e.clientX, e.clientY)));
       if (!pushHit && !(S.opts.fingerDraw && touch3d.size === 1 && Date.now() - penSeen > 2000)) {
         if (drag && drag.in3d && drag.touch) toolUp(e, drag.start, drag.startW, true);
         return;
@@ -3119,8 +3262,8 @@ function bind3DInput(v) {
         const F = frameFor(S.facetSel);
         const q0 = F && faceLocal(v, S.facetSel, e.clientX, e.clientY);
         if (q0) {
-          const bb = G.bbox(F.base), w0 = F.pt(q0, 0.08), mg = (S.isoFace ? 4000 : 40) / v.pxPerMeter([w0[0], w0[2]], Math.max(0.02, w0[1]));
-          if (q0[0] > bb.x0 - mg && q0[0] < bb.x1 + mg && q0[1] > bb.y0 - mg && q0[1] < bb.y1 + mg) { alt = S.isoFace ? null : hitF; fc = { ...S.facetSel, point: w0, facetId: hitF && sameFace(hitF, S.facetSel) ? hitF.facetId : regionAt(S.facetSel, q0) }; }
+          const bb = G.bbox(F.base), w0 = F.pt(q0, 0.08), mg = (S.isoFace || lookOn(S.facetSel) ? 4000 : 40) / v.pxPerMeter([w0[0], w0[2]], Math.max(0.02, w0[1]));
+          if (q0[0] > bb.x0 - mg && q0[0] < bb.x1 + mg && q0[1] > bb.y0 - mg && q0[1] < bb.y1 + mg) { alt = S.isoFace || lookOn(S.facetSel) ? null : hitF; fc = { ...S.facetSel, point: w0, facetId: hitF && sameFace(hitF, S.facetSel) ? hitF.facetId : regionAt(S.facetSel, q0) }; }
         }
       }
       if (!fc) { if (e.pointerType !== 'mouse') toast('Chạm vào mái hoặc mặt đứng của một công trình'); return; }
@@ -3149,7 +3292,7 @@ function bind3DInput(v) {
       if (hitId && e.pointerType === 'pen' && S.tool === 'select' && pick3 === 'top') {
         const it = S.doc.items.find((i) => i.id === hitId);
         S.selectedId = hitId; renderProps();
-        drag = { kind: 'extrude', pointerId: e.pointerId, id: hitId, y: e.clientY, floors: it.props.floors, d0: it.props.depth || 0, sc: w ? v.pxPerMeter(w) : 4, snap: snapItems(), start: p, in3d: true };
+        drag = { kind: 'extrude', pointerId: e.pointerId, id: hitId, y: e.clientY, floors: it.props.floors, d0: it.props.depth || 0, h0: it.props.solid ? solidH(it) : undefined, sc: w ? v.pxPerMeter(w) : 4, snap: snapItems(), start: p, in3d: true };
         schedule3D(); return;
       }
       if (!w) { if (pick3 === 'box') toolDown(Object.assign(e, { hitId }), p, [0, 0], 4, true); return; }
@@ -3160,6 +3303,7 @@ function bind3DInput(v) {
     let ww = w;
     if (S.tool === 'face' || S.tool === 'push') {
       let hitId = v.pickBuilding(e.clientX, e.clientY);
+      if (S.tool === 'push') { const pid = v.pickPlane(e.clientX, e.clientY); if (pid) hitId = pid; }
       if (hitId && S.tool === 'push' && !inIsoFace(S.doc.items.find((i) => i.id === hitId))) { toast('Đang «Khóa mặt»: chỉ kéo được mảng trên mặt đang chọn'); return; }
       if (hitId && S.tool === 'face') { const hi = S.doc.items.find((i) => i.id === hitId); if (hi && hi.kind === 'facet') hitId = rootOf(hi).id; }
       e.hitId = hitId;
@@ -3195,6 +3339,7 @@ function bind3DInput(v) {
     if (drag.kind === 'extrude') {
       const it = S.doc.items.find((i) => i.id === drag.id); if (!it) return;
       if (it.kind === 'facet') { facetDepthDrag(it, e); return; }
+      if (it.props.solid) { solidDrag3D(it, e); return; }
       const f = Math.max(1, Math.round(drag.floors + (drag.y - e.clientY) / 12));
       if (f !== it.props.floors) { it.props.floors = f; drag.moved = true; toast(`${f} tầng · cao ${G.fmtNum(f * (it.props.floorH || 3.3))} m`); changed({ save: false, light: true }); }
       return;
@@ -3724,6 +3869,8 @@ function finishFacetStroke(v, d, e) {
     return;
   }
 }
+// QP-25: đang «Nhìn thẳng mặt» này: được vẽ ra ngoài mặt, nét vẫn nằm trên mặt phẳng chứa mặt
+const lookOn = (fc) => !!(S.lookLock && fc && sameFace(S.lookLock, fc));
 function planFacetStroke(fc, raw, sc) {
   const F = frameFor(fc); if (!F || raw.length < 2) return { ok: false };
   const len = G.length(raw);
@@ -3732,11 +3879,11 @@ function planFacetStroke(fc, raw, sc) {
   const closed = raw.length >= 6 && len * sc > 80 && G.dist(raw[0], raw[raw.length - 1]) < Math.max(0.18 * len, 16 / sc) && Math.abs(G.area(raw)) * sc * sc > 900;
   if (closed) {
     const poly = shapeFacetPath(raw, S.opts.facet.form, sc, true);
-    if (poly.length < 3 || Math.abs(G.area(poly)) < 0.3 || !G.pointInPolygon(G.centroid(poly), F.base)) return { ok: false, msg: 'Hình khép kín cần nằm trên mặt khối' };
+    if (poly.length < 3 || Math.abs(G.area(poly)) < 0.3 || (!G.pointInPolygon(G.centroid(poly), F.base) && !lookOn(fc))) return { ok: false, msg: 'Hình khép kín cần nằm trên mặt khối' };
     return { ok: true, poly };
   }
   const path = ZO.extendPath(shapeFacetPath(raw, S.opts.facet.form, sc, false), 14 / sc);
-  if (!path.some((q, i) => G.pointInPolygon(q, F.base) || (i && G.pointInPolygon([(q[0] + path[i - 1][0]) / 2, (q[1] + path[i - 1][1]) / 2], F.base)))) return { ok: false, msg: 'Nét chia cần nằm trên mặt khối' };
+  if (!lookOn(fc) && !path.some((q, i) => G.pointInPolygon(q, F.base) || (i && G.pointInPolygon([(q[0] + path[i - 1][0]) / 2, (q[1] + path[i - 1][1]) / 2], F.base)))) return { ok: false, msg: 'Nét chia cần nằm trên mặt khối' };
   return { ok: true, path };
 }
 // Vẽ lên lớp phủ 3D: mặt đang chọn, đường dóng, nét đang vẽ, nét đang chọn
@@ -3831,7 +3978,7 @@ function draw3DOverlay() {
 
 // Phím tắt trên PC
 // ---- QP-23: phím tắt kiểu AutoCAD (chỉ trên Windows / PC): gõ chữ tắt rồi Enter hoặc Space ----
-const DEF_KEYS = { free: 'T', organic: 'HC', smooth: 'TM', arc: 'TC', line: 'L', pline: 'PL', curve: 'SL', circle: 'CC', tri: 'TG', rect: 'RE', ellipse: 'EL', penta: 'POL', erase: 'E', trim: 'TR', fillet: 'F', chamfer: 'CHA', offset: 'O', rotate: 'RO', copy: 'C', join: 'J', polyclose: 'DGK', extrude: 'EXT' };
+const DEF_KEYS = { free: 'T', organic: 'HC', smooth: 'TM', arc: 'TC', line: 'L', pline: 'PL', curve: 'SL', circle: 'CC', tri: 'TG', rect: 'RE', ellipse: 'EL', penta: 'POL', erase: 'E', trim: 'TR', fillet: 'F', chamfer: 'CHA', offset: 'O', rotate: 'RO', copy: 'C', join: 'J', polyclose: 'DGK', mkface: 'MAT', extrude: 'EXT' };
 const PEN_CMDS = () => [...PEN.PEN_SHAPES.map(([k, n]) => [k, n, 'shape']), ...PEN.PEN_OPS.map(([k, n]) => [k, n, 'op'])];
 const keysOn = () => !isIPad() || window.__qpKeys;
 function keyMap() { const m = new Map(), K = { ...DEF_KEYS, ...(S.opts.keys || {}) }; for (const [k] of PEN_CMDS()) for (const a of String(K[k] || '').split(/[,\s]+/)) if (a) m.set(a.toUpperCase(), k); return m; }
@@ -4286,7 +4433,10 @@ function renderProps() {
       const over = z && z.props.maxFloors > 0 && f > z.props.maxFloors;
       kv([['Diện tích chiếm đất', G.fmtArea(area)], ['Tổng sàn (GFA)', G.fmtArea(area * f)], ['Chiều cao', G.fmtNum(f * (it.props.floorH || 3.3)) + ' m'],
         ['Thuộc ô đất', z ? M.lotName(S.metrics, z) : '—'], ...(z ? [['Tầng cao khống chế', z.props.maxFloors + ' tầng', over ? 'over' : '']] : [])]);
-      field('Số tầng', stepper(f, 1, 1, (v) => edit(() => (it.props.floors = v))));
+      if (it.props.solid) { // QP-25: khối đặc dựng bằng Cọ vẽ: chỉnh theo mét, không đường phân tầng
+        field('Chiều cao (m)', stepper(+G.fmtNum(solidH(it), 2).replace(',', '.'), 0.5, 0.5, (v) => edit(() => extrudeTarget(it, it.props.down ? -v : v))));
+        field('Nâng chân khối (m)', stepper(+(it.props.dz || 0).toFixed(2), -300, 0.5, (v) => edit(() => { if (v) it.props.dz = v; else delete it.props.dz; })));
+      } else field('Số tầng', stepper(f, 1, 1, (v) => edit(() => (it.props.floors = v))));
       {
         const chips = h('<div class="chips"></div>');
         const w = h(`<button class="chip ${!it.props.color ? 'on' : ''}">Mặc định</button>`);
@@ -4782,9 +4932,9 @@ function renderBData(hud) {
     <h3>Dữ liệu công trình<span class="hb-exp"><button id="bdXlsx" title="Xuất bảng ra Excel">⬇ Xuất Excel</button><button id="bdImp" title="Nhập dữ liệu từ Excel, nối theo một cột">⬆ Nhập Excel</button></span><button id="hudClose" title="Thu nhỏ">✕ Đóng</button></h3>
     ${hudTabs()}
     <div class="hud-big-body">
-      <div class="note"><b>Ký hiệu</b> tự đặt theo mã đất của ô đất bên dưới (VD <b>CT.AN 01</b>), đánh số từ trên xuống dưới, từ trái sang phải; gõ vào ô để đặt ký hiệu riêng (xoá trắng để về tự động). <b>Tên công trình</b> gõ tự do. <b>Chức năng</b> mặc định theo loại đất, gõ để sửa (xoá trắng để về theo loại đất). Tầng cao lấy theo bản vẽ. Chạm số thứ tự để chọn công trình trên bản vẽ. Tích ô cạnh tên cột để dán nhãn trường đó lên công trình (2D và 3D).</div>
-      <div class="bd-wrap"><table class="hb-tab bd-tab"><thead><tr><th>#</th>${[['name', 'Ký hiệu'], ['title', 'Tên công trình'], ['func', 'Chức năng'], ['floors', 'Tầng cao'], ['material', 'Vật liệu'], ['status', 'Tình trạng'], ...ex.map((k) => [k, k])].map(([k, n]) => `<th${k === 'floors' ? ' class="n"' : ''}><label class="bd-lk" title="Tích để dán nhãn trường này lên công trình trên bản vẽ"><input type="checkbox" data-lk="${esc(k)}"${lk.includes(k) ? ' checked' : ''}>${esc(n)}</label></th>`).join('')}</tr></thead><tbody>
-      ${rows.map((r, i) => `<tr class="${S.selectedId === r.it.id ? 'sel' : ''}"><td><button class="bd-pick" data-id="${r.it.id}">${i + 1}</button></td>${td(r, 'name', r.it.props.bdata && r.it.props.bdata.name ? r.name : '')}${td(r, 'title', r.title)}${td(r, 'func', r.it.props.bdata && r.it.props.bdata.func ? r.func : '')}${td(r, 'floors', r.floors, 'number')}${td(r, 'material', r.material)}${td(r, 'status', r.status)}${ex.map((k) => td(r, k, r.extra[k])).join('')}</tr>`).join('') || '<tr><td colspan="8" class="muted">Chưa có công trình (lớp Công trình)</td></tr>'}
+      <div class="note"><b>Ký hiệu</b> tự đặt theo mã đất của ô đất bên dưới (VD <b>CT.AN 01</b>), đánh số từ trên xuống dưới, từ trái sang phải; gõ vào ô để đặt ký hiệu riêng (xoá trắng để về tự động). <b>Tên công trình</b> gõ tự do. <b>Chức năng</b> mặc định theo loại đất, gõ để sửa (xoá trắng để về theo loại đất). Tầng cao lấy theo bản vẽ. <b>Diện tích XD</b> là diện tích sàn tầng 1, <b>Tổng sàn</b> = sàn tầng 1 × tầng cao (tự tính). Chạm số thứ tự để chọn công trình trên bản vẽ. Tích ô cạnh tên cột để dán nhãn trường đó lên công trình (2D và 3D).</div>
+      <div class="bd-wrap"><table class="hb-tab bd-tab"><thead><tr><th>#</th>${[['name', 'Ký hiệu'], ['title', 'Tên công trình'], ['func', 'Chức năng'], ['floors', 'Tầng cao'], ['foot', 'Diện tích XD (m²)'], ['gfa', 'Tổng sàn (m²)'], ['material', 'Vật liệu'], ['status', 'Tình trạng'], ...ex.map((k) => [k, k])].map(([k, n]) => `<th${k === 'floors' || k === 'foot' || k === 'gfa' ? ' class="n"' : ''}><label class="bd-lk" title="Tích để dán nhãn trường này lên công trình trên bản vẽ"><input type="checkbox" data-lk="${esc(k)}"${lk.includes(k) ? ' checked' : ''}>${esc(n)}</label></th>`).join('')}</tr></thead><tbody>
+      ${rows.map((r, i) => `<tr class="${S.selectedId === r.it.id ? 'sel' : ''}"><td><button class="bd-pick" data-id="${r.it.id}">${i + 1}</button></td>${td(r, 'name', r.it.props.bdata && r.it.props.bdata.name ? r.name : '')}${td(r, 'title', r.title)}${td(r, 'func', r.it.props.bdata && r.it.props.bdata.func ? r.func : '')}${td(r, 'floors', r.floors, 'number')}<td class="n bd-calc">${BD.fmtM2(r.foot)}</td><td class="n bd-calc">${BD.fmtM2(r.gfa)}</td>${td(r, 'material', r.material)}${td(r, 'status', r.status)}${ex.map((k) => td(r, k, r.extra[k])).join('')}</tr>`).join('') || '<tr><td colspan="10" class="muted">Chưa có công trình (lớp Công trình)</td></tr>'}
       </tbody></table></div>
     </div>`;
   bindHudTabs(hud);
@@ -4797,7 +4947,7 @@ function renderBData(hud) {
   }));
   hud.querySelectorAll('input[data-lk]').forEach((cb) => (cb.onchange = () => {
     checkpoint(); const k = cb.dataset.lk, cur = BD.labelKeys(S.doc).filter((x) => x !== k);
-    const order = ['name', 'title', 'func', 'floors', 'material', 'status', ...ex];
+    const order = ['name', 'title', 'func', 'floors', 'foot', 'gfa', 'material', 'status', ...ex];
     S.doc.settings.bdLabels = (cb.checked ? [...cur, k] : cur).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     changed(); if (S.mode === '3d' && v3) draw3DOverlay();
   }));
@@ -4807,8 +4957,8 @@ function renderBData(hud) {
 }
 function bdataTable() {
   const rows = BD.buildingRows(S.doc), ex = BD.extraCols(rows);
-  const header = [...BD.BASE_FIELDS.map((f) => f[1]), ...ex, 'Mã đối tượng'];
-  return [header, rows.map((r) => [r.name, r.title, r.func, r.floors, r.material, r.status, ...ex.map((k) => r.extra[k] ?? ''), r.it.id])];
+  const header = ['Ký hiệu', 'Tên công trình', 'Chức năng', 'Tầng cao', 'Diện tích XD (m²)', 'Tổng sàn (m²)', 'Vật liệu', 'Tình trạng', ...ex, 'Mã đối tượng'];
+  return [header, rows.map((r) => [r.name, r.title, r.func, r.floors, +r.foot.toFixed(1), +r.gfa.toFixed(1), r.material, r.status, ...ex.map((k) => r.extra[k] ?? ''), r.it.id])];
 }
 async function exportBData() {
   const [header, data] = bdataTable();
@@ -5885,6 +6035,7 @@ async function setMode(m) {
       return setMode('2d');
     }
   } else if (v3) { v3.stop(); requestRender(); }
+  if (S.mode === m && S.doc) { syncPen3DTool(); syncPenBar(); } // QP-25: Extrude của Cọ vẽ: 3D dùng Kéo mặt, 2D về công cụ cũ
   renderToolOpts();
 }
 $('#btn2d').onclick = () => setMode('2d');
@@ -6103,8 +6254,10 @@ function toast(msg, ms = 2600) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), ms);
 }
 // Lỗi bất ngờ: hiện lên màn hình để người dùng chụp lại báo lỗi
-window.addEventListener('error', (e) => { if (e && e.message && !/ResizeObserver|Script error/.test(e.message)) toast('Lỗi: ' + e.message, 8000); });
-window.addEventListener('unhandledrejection', (e) => { const r = e && e.reason; toast('Lỗi: ' + (r && r.message ? r.message : r), 8000); });
+// chỉ báo lỗi của chính ứng dụng; lỗi của tiện ích trình duyệt / script chèn từ ngoài (VD «reading 'M_ID'») thì bỏ qua
+const ownErr = (file, stack) => { const src = String(file || '') + ' ' + String(stack || ''); return /\/(js|vendor)\/[\w.-]+\.js/.test(src) && (!/(chrome|moz|safari)(-web)?-extension:/.test(src)) && src.includes(location.host); };
+window.addEventListener('error', (e) => { if (e && e.message && !/ResizeObserver|Script error/.test(e.message) && ownErr(e.filename, e.error && e.error.stack)) toast('Lỗi: ' + e.message, 8000); });
+window.addEventListener('unhandledrejection', (e) => { const r = e && e.reason; if (r && r.stack && !ownErr('', r.stack)) return; toast('Lỗi: ' + (r && r.message ? r.message : r), 8000); });
 
 // Bắt đầu
 showHome();

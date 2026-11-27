@@ -3,7 +3,7 @@ import * as G from './geom.js';
 import { LU_PLANS, LU_TABLES } from './landuse-tables.js';
 import { junctionCorners } from './roadops.js';
 
-export const APP_VERSION = '0.32.6';
+export const APP_VERSION = '0.33.0';
 export const DESIGNER = 'Phan Trọng Tuệ';
 
 // Danh mục chức năng sử dụng đất: theo loại hình quy hoạch (QHC 1/10.000, QHC 1/5.000, QHPK 1/2.000, QHCT)
@@ -95,7 +95,7 @@ export const LAYERS = [
 export const LAYER_ORDER = [8, 0, 3, 7, 2, 9, 6, 4, 5];
 export const EXIST_LAYER = 9; // nhà hiện trạng (tải từ OpenStreetMap hoặc chuyển từ công trình)
 export const BASE_LAYER = 8; // lớp riêng của ảnh nền, tách khỏi lớp nét CAD (0)
-export const KIND_LAYER = { water: 7, road: 2, zone: 3, park: 7, land: 7, cover: 7, building: 6, facet: 6, arrow: 4, flow: 4, circle: 4, cloud: 4, icon: 4, sketch: 5, cad: 0, junction: 2 };
+export const KIND_LAYER = { water: 7, road: 2, zone: 3, park: 7, land: 7, cover: 7, building: 6, facet: 6, plane: 6, arrow: 4, flow: 4, circle: 4, cloud: 4, icon: 4, sketch: 5, cad: 0, junction: 2 };
 // QP-20: nét DXF / CAD «chỉ để nhìn» (Quản lý lớp, lớp 0): không bắt điểm, không chọn, không làm ranh giới phủ màu, cắt…
 export const cadInert = (doc, it) => it.kind === 'cad' && !!((doc.layers || []).find((l) => l.id === layerOf(it)) || {}).cadView;
 export const liveItems = (doc) => doc.items.filter((it) => !cadInert(doc, it));
@@ -133,7 +133,7 @@ export function upgradeDoc(d) {
 }
 export const KIND_NAMES = {
   road: 'Đường giao thông', building: 'Công trình', water: 'Sông hồ', park: 'Cây xanh', zone: 'Ô đất',
-  arrow: 'Mũi tên', flow: 'Mũi tên nét đứt', circle: 'Vòng tròn', cloud: 'Vùng mây', sketch: 'Nét vẽ', cad: 'Nét CAD', icon: 'Biểu tượng', land: 'Cảnh quan', facet: 'Mảng mặt khối', cover: 'Vật liệu phủ', junction: 'Góc giao lộ',
+  arrow: 'Mũi tên', flow: 'Mũi tên nét đứt', circle: 'Vòng tròn', cloud: 'Vùng mây', sketch: 'Nét vẽ', cad: 'Nét CAD', icon: 'Biểu tượng', land: 'Cảnh quan', facet: 'Mảng mặt khối', cover: 'Vật liệu phủ', junction: 'Góc giao lộ', plane: 'Mặt (Cọ vẽ)',
 };
 
 // Liên hệ chỉ tiêu: HSSDĐ = MĐXD (%) / 100 × Tầng cao. Giá trị được «giữ» (lock) là hằng số,
@@ -388,7 +388,7 @@ export function computeMetrics(doc) {
       if ((LANDUSE[z.props.code] || {}).cat === 'o') resGfa += a * own;
       if (z.props.maxFloors > 0 && f > z.props.maxFloors) { alerts[b.id] = 'over'; addV(b.id, `Tầng cao ${f}T > ${z.props.maxFloors}T`); }
       if (z.props.setback > 0) {
-        let inner = innerOf.get(z); if (!inner) innerOf.set(z, (inner = G.offsetPolygon(z.pts, -z.props.setback)));
+        let inner = innerOf.get(z); if (!inner) innerOf.set(z, (inner = G.insetPolygon(z.pts, z.props.setback)));
         if (b.pts.some((p) => !G.pointInPolygon(p, inner) && G.distToPolyline(p, inner, true).d > 0.05)) {
           alerts[b.id] = 'over'; outside.push(b.id);
           let dmin = Infinity; for (const p of b.pts) { const d = G.pointInPolygon(p, z.pts) ? G.distToPolyline(p, z.pts, true).d : 0; if (d < dmin) dmin = d; }
@@ -428,9 +428,19 @@ function groundOf(b) {
   return isFinite(m) ? m : 0;
 }
 export function bldElev(b, byId, depth = 0) {
-  if (!b.props.on || depth > 30) return groundOf(b);
-  const p = byId.get(b.props.on); if (!p) return 0;
-  return bldElev(p, byId, depth + 1) + bldHeight(p);
+  const dz = b.props.dz || 0; // QP-25: khối / mặt dựng bằng Cọ vẽ có thể đặt cao hơn / thấp hơn chân (đùn xuống dưới)
+  if (!b.props.on || depth > 30) return groundOf(b) + dz;
+  const p = byId.get(b.props.on); if (!p) return dz;
+  return bldElev(p, byId, depth + 1) + bldHeight(p) + dz;
+}
+// QP-25: mặt phẳng (Tạo mặt của Cọ vẽ) nằm ở cao độ này: trên mái khối props.on hoặc trên mặt đất, cộng dz
+export const planeElev = (pl, byId) => bldElev(pl, byId);
+// chiều cao khối đặc (Cọ vẽ): giữ đúng số mét, số tầng chỉ để thống kê
+export function setSolidHeight(b, H) {
+  H = Math.max(0.1, Math.abs(H));
+  const floors = Math.max(1, Math.round(H / 3.3));
+  Object.assign(b.props, { floors, floorH: H / floors, solid: true });
+  return H;
 }
 export function stackFloors(b, byId, depth = 0) {
   const own = b.props.floors || 1;

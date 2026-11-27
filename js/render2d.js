@@ -82,6 +82,15 @@ export function cachedOffset(it, d) {
   return r;
 }
 
+const inCache = new WeakMap();
+// chỉ giới xây dựng: co vào sạch ở góc (G.insetPolygon)
+function cachedInset(it, d) {
+  const c = inCache.get(it);
+  if (c && c.pts === it.pts && c.d === d && c.n === it.pts.length && c.p0 === it.pts[0]) return c.r;
+  const r = G.insetPolygon(it.pts, d);
+  inCache.set(it, { pts: it.pts, d, n: it.pts.length, p0: it.pts[0], r });
+  return r;
+}
 function pathPts(ctx, v, pts, closed) {
   ctx.beginPath(); addPts(ctx, v, pts, closed);
 }
@@ -261,7 +270,7 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
     ctx.setLineDash(al ? [] : [6, 4]); ctx.stroke(); ctx.setLineDash([]);
     if (doc.settings.showBuildLine !== false && z.props.setback > 0) {
       if (z.props.setback * v.scale < 1.5) continue; // quá nhỏ để thấy
-      const inner = cachedOffset(z, -z.props.setback);
+      const inner = cachedInset(z, z.props.setback);
       pathPts(ctx, v, inner, true);
       ctx.strokeStyle = '#d0312d'; ctx.lineWidth = 1.5; ctx.setLineDash([10, 4, 2, 4]); ctx.stroke(); ctx.setLineDash([]);
     }
@@ -333,8 +342,16 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
       const c = v.toScreen(G.centroid(b.pts));
       ctx.fillStyle = '#1d2a3a'; ctx.font = `600 ${Math.min(14, 6 + v.scale * 2)}px system-ui, sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText((b.props.on ? '+' : '') + b.props.floors + 'T', c[0], c[1]);
+      ctx.fillText(b.props.solid ? (b.props.dz < 0 && !b.props.on ? '↓' : '') + G.fmtNum((b.props.floors || 1) * (b.props.floorH || 3.3), 1) + ' m' : (b.props.on ? '+' : '') + b.props.floors + 'T', c[0], c[1]);
     }
+  }
+  // QP-25: mặt phẳng tạo bằng Cọ vẽ (chờ Extrude): xanh trong, viền đứt
+  for (const f of by('plane')) {
+    if (!f.pts || f.pts.length < 3) continue;
+    pathPts(ctx, v, f.pts, true);
+    ctx.fillStyle = 'rgba(59,130,246,.22)'; ctx.fill();
+    ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2; ctx.setLineDash([7, 4]); ctx.stroke(); ctx.setLineDash([]);
+    if (v.scale > 0.6) { const c = v.toScreen(G.centroid(f.pts)); ctx.fillStyle = '#1d4ed8'; ctx.font = `600 ${Math.min(13, 6 + v.scale * 2)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(f.props.on ? 'Mặt (mái)' : 'Mặt', c[0], c[1] + (f.props.on ? 16 : 0)); }
   }
   // mảng mặt khối (chia mặt trong 3D): viền nét đứt
   for (const f of by('facet')) {
@@ -615,7 +632,7 @@ export function hitTest(doc, p, scale, skipLocked = false) {
   const tol = 10 / scale;
   const vis = Object.fromEntries(doc.layers.map((l) => [l.id, l.visible]));
   const locked = Object.fromEntries(doc.layers.map((l) => [l.id, !!l.locked]));
-  const order = ['icon', 'sketch', 'arrow', 'flow', 'circle', 'cloud', 'facet', 'building', 'land', 'road', 'park', 'cover', 'water', 'zone', 'cad'];
+  const order = ['icon', 'sketch', 'arrow', 'flow', 'circle', 'cloud', 'plane', 'facet', 'building', 'land', 'road', 'park', 'cover', 'water', 'zone', 'cad'];
   // lớp trên cùng được ưu tiên; trong một lớp ưu tiên theo loại đối tượng
   const rank = new Map(layerOrder(doc).map((id, i) => [id, i]));
   const ko = new Map(order.map((k, i) => [k, i]));
@@ -629,7 +646,7 @@ export function hitAll(doc, p, scale, skipLocked = false) {
   const tol = 10 / scale;
   const vis = Object.fromEntries(doc.layers.map((l) => [l.id, l.visible]));
   const locked = Object.fromEntries(doc.layers.map((l) => [l.id, !!l.locked]));
-  const order = ['icon', 'sketch', 'arrow', 'flow', 'circle', 'cloud', 'facet', 'building', 'land', 'road', 'park', 'cover', 'water', 'zone', 'cad'];
+  const order = ['icon', 'sketch', 'arrow', 'flow', 'circle', 'cloud', 'plane', 'facet', 'building', 'land', 'road', 'park', 'cover', 'water', 'zone', 'cad'];
   const rank = new Map(layerOrder(doc).map((id, i) => [id, i]));
   const ko = new Map(order.map((k, i) => [k, i]));
   const cand = doc.items.map((it, i) => ({ it, i, L: layerOf(it) })).filter((c) => vis[c.L] && !(skipLocked && locked[c.L]) && c.it.kind !== 'facet' && !cadInert(doc, c.it));

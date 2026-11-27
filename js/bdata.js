@@ -11,6 +11,10 @@ export const BASE_FIELDS = [
   ['material', 'Vật liệu'],
   ['status', 'Tình trạng'],
 ];
+// QP-25: cột tính sẵn theo bản vẽ (không sửa, không nhập): Diện tích XD = diện tích sàn tầng 1, Tổng sàn = sàn tầng 1 × tầng cao
+export const CALC_FIELDS = [['foot', 'Diện tích XD (m²)'], ['gfa', 'Tổng sàn (m²)']];
+const CALC_NAMES = ['diện tích xd', 'diện tích xd (m²)', 'diện tích xd (m2)', 'diện tích xây dựng', 'diện tích xây dựng (m²)', 'tổng sàn', 'tổng sàn (m²)', 'tổng sàn (m2)', 'tổng diện tích sàn', 'mã đối tượng'];
+export const fmtM2 = (v) => (v ? Math.round(v).toLocaleString('vi-VN') : '');
 const zoneAt = (zones, c) => { for (let i = zones.length - 1; i >= 0; i--) if (G.pointInPolygon(c, zones[i].pts)) return zones[i]; return null; };
 
 // danh sách công trình (lớp Công trình, không tính khối chồng trên mái), đánh số theo mã đất:
@@ -23,7 +27,8 @@ export function buildingRows(doc) {
     const code = z && z.props.code, lu = code ? M.LANDUSE[code] : null;
     const kids = doc.items.filter((k) => k.kind === 'building' && k.props && k.props.on === b.id);
     const floors = (b.props.floors || 0) + (kids.length ? Math.max(...kids.map((k) => k.props.floors || 0)) : 0);
-    return { it: b, c, h: Math.max(1, bb.y1 - bb.y0), code: code || '', lbl: lu ? lu.lbl || code : '', func: lu ? lu.name : '', floors };
+    const foot = G.area(b.pts);
+    return { it: b, c, h: Math.max(1, bb.y1 - bb.y0), code: code || '', lbl: lu ? lu.lbl || code : '', func: lu ? lu.name : '', floors, foot, gfa: foot * floors };
   });
   // hàng: các khối có tâm lệch nhau theo phương dọc ít hơn nửa chiều cao khối trung bình
   const hs = rows.map((r) => r.h).sort((a, b) => a - b), band = hs.length ? Math.max(2, hs[hs.length >> 1] * 0.5) : 5;
@@ -49,7 +54,7 @@ export function buildingRows(doc) {
 // QP-24: nhãn dán lên công trình trên bản vẽ (các trường được tích trong bảng Dữ liệu công trình)
 export const labelKeys = (doc) => (doc.settings && Array.isArray(doc.settings.bdLabels) ? doc.settings.bdLabels : []);
 export function labelLines(r, keys) {
-  return keys.map((k) => (k === 'name' ? r.name : k === 'title' ? r.title : k === 'func' ? r.func : k === 'floors' ? (r.floors ? r.floors + 'T' : '') : k === 'material' ? r.material : k === 'status' ? r.status : r.extra && r.extra[k]))
+  return keys.map((k) => (k === 'name' ? r.name : k === 'title' ? r.title : k === 'func' ? r.func : k === 'floors' ? (r.floors ? r.floors + 'T' : '') : k === 'foot' ? (r.foot ? 'XD ' + fmtM2(r.foot) + ' m²' : '') : k === 'gfa' ? (r.gfa ? 'Sàn ' + fmtM2(r.gfa) + ' m²' : '') : k === 'material' ? r.material : k === 'status' ? r.status : r.extra && r.extra[k]))
     .filter((t) => t != null && String(t).trim() !== '').map((t) => String(t).trim());
 }
 const lblCache = new WeakMap();
@@ -162,6 +167,7 @@ export function joinRows(rows, table, keyCol, keyField) {
     hit++;
     header.forEach((h, c) => {
       if (c === keyCol || !String(h).trim()) return;
+      if (CALC_NAMES.includes(norm(h))) return;
       const f = fieldByName.get(norm(h));
       const v = d[c] ?? '';
       if (f) { if (f === 'floors' && String(v).trim() === '') return; setField(r.it, f, (f === 'name' && norm(v) === norm(r.auto)) || (f === 'func' && norm(v) === norm(r.funcAuto)) ? '' : v); }

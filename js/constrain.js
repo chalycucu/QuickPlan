@@ -6,7 +6,7 @@ import { roadTotalWidth, applyPreset } from './model.js';
 export function buildLine(zone) {
   const sb = zone.props.setback || 0;
   if (sb <= 0 || zone.pts.length < 3) return null;
-  const inner = G.offsetPolygon(zone.pts, -sb);
+  const inner = G.insetPolygon(zone.pts, sb);
   if (G.area(inner) < 1 || Math.sign(G.signedArea(inner)) !== Math.sign(G.signedArea(zone.pts))) return null;
   return inner;
 }

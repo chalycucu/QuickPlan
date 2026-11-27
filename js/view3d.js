@@ -5,7 +5,7 @@ import { OrbitControls } from '../vendor/three/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import * as G from './geom.js';
 import { booleanPolys } from './zoneops.js';
-import { frameOf, edgeNormal } from './faces.js';
+import { frameOf, edgeNormal, shapePoly } from './faces.js';
 import { displayHeights, groundSampler, decodeHeights, elevColor } from './terrain.js';
 import { renderScene, View } from './render2d.js';
 import { matImage, findMat } from './materials.js';
@@ -165,6 +165,14 @@ export class View3D {
       if (id && !out.includes(id)) out.push(id);
     }
     return out;
+  }
+  // QP-25: mặt phẳng (Tạo mặt) gần mắt hơn khối thì trả về id mặt
+  pickPlane(cx, cy) {
+    if (!this.planes || !this.planes.length) return null;
+    this.ray.setFromCamera(this._ndc(cx, cy), this.camera);
+    const hp = this.ray.intersectObjects(this.planes, false)[0]; if (!hp) return null;
+    const hb = this.ray.intersectObjects(this.buildings, false)[0];
+    return !hb || hp.distance <= hb.distance + 0.3 ? hp.object.userData.id : null;
   }
   pickBuilding(cx, cy) {
     this.ray.setFromCamera(this._ndc(cx, cy), this.camera);
@@ -380,7 +388,7 @@ export class View3D {
     if (doc.settings.showBuildLine !== false && !drape) {
       const seg = [];
       for (const z of doc.items.filter((i) => i.kind === 'zone' && i.props.setback > 0 && iv(i))) {
-        const inner = G.offsetPolygon(z.pts, -z.props.setback);
+        const inner = G.insetPolygon(z.pts, z.props.setback);
         for (let i = 0; i < inner.length; i++) { const a = inner[i], b = inner[(i + 1) % inner.length]; seg.push(a[0], 0.45, a[1], b[0], 0.45, b[1]); }
       }
       if (seg.length) {
@@ -485,7 +493,7 @@ export class View3D {
           k.ids.push(b.id); k.starts.push(k.n); k.n += geo.attributes.position.count; k.geos.push(geo);
           if (showEdges) edgeGeos.push(new THREE.EdgesGeometry(geo, 25));
         }
-        if (mode === 'iso') for (let i = 1; i < floors; i++) for (let j = 0; j < b.pts.length; j++) {
+        if (mode === 'iso' && !b.props.solid) for (let i = 1; i < floors; i++) for (let j = 0; j < b.pts.length; j++) {
           const p = b.pts[j], q = b.pts[(j + 1) % b.pts.length], hh = y0 + i * fh;
           floorSeg.push(p[0], hh, p[1], q[0], hh, q[1]);
         }
@@ -567,10 +575,33 @@ export class View3D {
             const F = frameOf(byId, it.id, k === 'top' ? 'top' : +k); if (!F) continue;
             for (const e of sk._edges) { const A = F.pt(e.a, 0.12), B = F.pt(e.b, 0.12); (e.dang ? dang : solid).push(...A, ...B); }
           }
+          // QP-25: nét vẽ ra ngoài mặt (Nhìn thẳng mặt) vẫn nằm trên mặt phẳng chứa mặt
+          for (const k of Object.keys(it.props.sk)) {
+            const sk = it.props.sk[k]; if (!sk) continue;
+            const F = frameOf(byId, it.id, k === 'top' ? 'top' : +k); if (!F) continue;
+            const out = (q) => !G.pointInPolygon(q, F.base);
+            for (const s of sk.shapes || []) {
+              const P = shapePoly(s); if (P.length < 2 || !P.some(out)) continue;
+              const n = s.type === 'path' ? P.length - 1 : P.length;
+              for (let i = 0; i < n; i++) solid.push(...F.pt(P[i], 0.12), ...F.pt(P[(i + 1) % P.length], 0.12));
+            }
+            for (const l of sk.lines || []) if (out(l.a) || out(l.b)) solid.push(...F.pt(l.a, 0.12), ...F.pt(l.b, 0.12));
+          }
         }
         for (const [arr, col] of [[solid, '#111827'], [dang, '#3b4a5e']]) if (arr.length) { const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); const ln = new THREE.LineSegments(bg, faceLineMat(col)); ln.renderOrder = 3; g.add(ln); }
       }
       if (edgeG.length) { const eg = mergeAll(edgeG); if (eg) { const ln = new THREE.LineSegments(eg, faceLineMat('#1f2937')); ln.renderOrder = 3; g.add(ln); } }
+    }
+    // QP-25: mặt phẳng tạo bằng Cọ vẽ (chưa đùn): tấm xanh trong, chọn / kéo được
+    this.planes = [];
+    const pById = new Map(doc.items.map((i) => [i.id, i]));
+    for (const pl of doc.items) {
+      if (pl.kind !== 'plane' || !pl.pts || pl.pts.length < 3 || !iv(pl)) continue;
+      const y = bldElev(pl, pById) + 0.06, gp = new THREE.ShapeGeometry(toShape(pl.pts, [])); gp.rotateX(Math.PI / 2); gp.translate(0, y, 0);
+      const sel = isSel(pl.id), mp = new THREE.Mesh(gp, new THREE.MeshBasicMaterial({ color: sel ? '#1d4ed8' : '#3b82f6', transparent: true, opacity: sel ? 0.5 : 0.35, side: THREE.DoubleSide, depthWrite: false }));
+      mp.userData = { id: pl.id, plane: true }; mp.renderOrder = 2; this.planes.push(mp); g.add(mp);
+      const ring = []; for (let i = 0; i < pl.pts.length; i++) { const a = pl.pts[i], c = pl.pts[(i + 1) % pl.pts.length]; ring.push(a[0], y, a[1], c[0], y, c[1]); }
+      const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(ring, 3)); g.add(new THREE.LineSegments(bg, new THREE.LineBasicMaterial({ color: 0x1d4ed8 })));
     }
     for (const it of doc.items) {
       if (!iv(it)) continue;

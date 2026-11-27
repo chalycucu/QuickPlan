@@ -420,13 +420,48 @@ body.touring #toolOpts, body.touring #bar3d, body.touring #props, body.touring .
 .road-cls { flex-basis: 100%; display: flex; flex-direction: column; gap: 3px; }
 .road-cls .rc-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .road-cls .rc-lv { font-size: 12px; color: #64748b; width: 82px; flex: none; }
-.jx-stage { position: relative; width: 100%; aspect-ratio: 1 / 1; margin-top: 8px; border-radius: 10px; overflow: hidden; background: #f4f1ea; }
-.jx-stage canvas { position: absolute; inset: 0; }
-.jx-c { position: absolute; transform: translate(-50%, -50%); width: 92px; height: 92px; border-radius: 50%; border: 3px solid #e11d48; background: rgba(255, 255, 255, .93); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 14px; color: #111827; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); }
-.jx-c.center { border-color: #1d4ed8; }
-.jx-c label { display: flex; align-items: center; gap: 2px; }
-.jx-c input { width: 34px; border: 0; border-bottom: 1px solid #94a3b8; background: transparent; font-size: 15px; text-align: center; padding: 1px 0; }
-.jx-c .jx-hr { width: 70%; height: 1px; background: #94a3b8; }
+.jx-dlg { width: min(560px, 92vw); }
+.jx-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; color: var(--muted); margin: 2px 0 10px; }
+.jx-tag { background: #eef2ff; color: #3730a3; font-weight: 600; border-radius: 999px; padding: 3px 10px; }
+.jx-leg { display: inline-flex; align-items: center; gap: 4px; }
+.jx-leg b { color: var(--ink); }
+.jx-dlg i { display: inline-flex; width: 18px; height: 18px; border-radius: 5px; align-items: center; justify-content: center; flex: none; }
+.jx-dlg i svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.jx-dlg i.v, .jx-qrow b.v { background: #fff3e0; color: #c2410c; }
+.jx-dlg i.r, .jx-qrow b.r { background: #e0f2fe; color: #0369a1; }
+.jx-stage { position: relative; width: 100%; aspect-ratio: 5 / 4; border-radius: 14px; overflow: hidden; background: #f4f1ea; border: 1px solid var(--line); box-shadow: inset 0 1px 3px rgba(15, 23, 42, .08); }
+.jx-stage canvas, .jx-ov { position: absolute; inset: 0; width: 100%; height: 100%; }
+.jx-ov { pointer-events: none; }
+.jx-ov .jx-ld { stroke: #334155; stroke-width: 1.2; stroke-dasharray: 3 3; opacity: .7; }
+.jx-ov .jx-pt { fill: #fff; stroke: #334155; stroke-width: 2; }
+.jx-ov .jx-pt.own { stroke: #7c3aed; }
+.jx-ov .jx-arc { fill: none; stroke: #0ea5e9; stroke-width: 3; stroke-linecap: round; }
+.jx-ov .jx-ch { fill: none; stroke: #f97316; stroke-width: 3; stroke-linecap: round; }
+.jx-c { position: absolute; transform: translate(-50%, -50%); width: 112px; background: rgba(255, 255, 255, .97); border-radius: 12px; box-shadow: 0 6px 18px rgba(15, 23, 42, .18), 0 0 0 1px rgba(15, 23, 42, .06); overflow: hidden; font-size: 13px; color: var(--ink); }
+.jx-c .jx-h { display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-weight: 700; font-size: 12px; background: #f1f5f9; color: #334155; letter-spacing: .02em; }
+.jx-c .jx-h b { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; align-items: center; justify-content: center; background: #334155; color: #fff; font-size: 11px; }
+.jx-c .jx-h small { margin-left: auto; font-weight: 600; color: #7c3aed; }
+.jx-c.own .jx-h { background: #f3e8ff; color: #5b21b6; }
+.jx-c.own .jx-h b { background: #7c3aed; }
+.jx-c.center { width: 120px; box-shadow: 0 8px 22px rgba(30, 58, 138, .28), 0 0 0 2px #1d4ed8; }
+.jx-c.center .jx-h { background: #1d4ed8; color: #fff; }
+.jx-c.center .jx-h b { background: #fff; color: #1d4ed8; }
+.jx-f { display: flex; align-items: center; gap: 5px; padding: 4px 8px; }
+.jx-f + .jx-f { border-top: 1px solid #eef1f4; }
+.jx-f span { font-weight: 700; width: 10px; }
+.jx-f input { width: 100%; min-width: 0; border: 1px solid #dbe2ea; border-radius: 7px; background: #fff; font-size: 15px; font-weight: 600; text-align: right; padding: 3px 6px; font-variant-numeric: tabular-nums; }
+.jx-f input:focus { outline: none; border-color: #1d4ed8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .18); }
+.jx-f em { font-style: normal; color: var(--muted); font-size: 12px; }
+.jx-quick { margin-top: 12px; display: grid; gap: 6px; font-size: 13px; }
+.jx-quick > span { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.jx-qrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.jx-qrow b { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+.jx-q { min-width: 40px; height: 32px; border: 1px solid var(--line); background: #fff; border-radius: 8px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.jx-q:active { background: #eef2ff; }
+.jx-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.jx-foot .muted { flex: 1; font-size: 12px; }
+.jx-foot .btn { min-height: 38px; padding: 6px 14px; }
+@media (max-width: 520px) { .jx-c { width: 96px; } .jx-c.center { width: 104px; } .jx-foot { flex-wrap: wrap; } }
 
 /* Kết nối máy tính (bản web) */
 .sync-pill.click { cursor: pointer; }
@@ -586,3 +621,10 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 .toolopts > .phd.brushes, .toolopts > .phd.seg { display: flex; }
 .toolopts > .pmin { z-index: 7; }
 :is(.props, .pop).pnl:not(.lay-h) > h3, .pop.pnl:not(.lay-h) > div > h3:first-child { position: sticky; top: 0; z-index: 6; background: var(--panel, #fff); }
+/* QP-25: cột tính sẵn trong bảng Dữ liệu công trình */
+.bd-tab td.bd-calc { padding: 4px 8px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink, #1f2a44); }
+/* hộp thoại giao lộ luôn đủ rộng, không chia cột */
+#pop:has(> .jx-dlg) { width: auto !important; min-width: 0 !important; max-width: calc(100vw - 24px) !important; max-height: calc(100vh - 24px) !important; }
+#pop.lay-h > .jx-dlg { columns: auto; }
+.jx-q.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.jx-foot { padding-right: 34px; }

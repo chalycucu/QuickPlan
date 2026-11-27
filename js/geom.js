@@ -294,3 +294,30 @@ export function robustBBox(groups) {
   const keep = bs.filter((b) => b.x0 > mx - R && b.x1 < mx + R && b.y0 > my - R && b.y1 < my + R);
   return union(keep.length ? keep : bs);
 }
+
+// QP-25: co đa giác vào trong một khoảng d (chỉ giới xây dựng): giao các cạnh đã dời song song,
+// bỏ các cạnh ngắn bị lật ngược ở góc (tránh các tam giác nhỏ thừa nhô ra ở góc ô đất)
+export function insetPolygon(poly, d) {
+  let P = [];
+  for (const p of poly) if (!P.length || dist(p, P[P.length - 1]) > 1e-6) P.push([p[0], p[1]]);
+  if (P.length > 1 && dist(P[0], P[P.length - 1]) <= 1e-6) P.pop();
+  // bỏ đỉnh thẳng hàng
+  for (let k = 0; k < 3 && P.length > 3; k++) P = P.filter((p, i) => { const a = P[(i - 1 + P.length) % P.length], b = P[(i + 1) % P.length]; const cr = (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]); return Math.abs(cr) > 1e-9 * (dist(a, p) * dist(p, b) + 1e-12) * 1e3; });
+  const n = P.length; if (n < 3) return [];
+  const s = Math.sign(signedArea(P)) || 1;
+  // đường cạnh i dời vào trong: điểm o, hướng u
+  const E = P.map((a, i) => { const b = P[(i + 1) % n], l = dist(a, b) || 1, u = [(b[0] - a[0]) / l, (b[1] - a[1]) / l], nn = [-u[1] * s, u[0] * s]; return { o: [a[0] + nn[0] * d, a[1] + nn[1] * d], u, a, b }; });
+  // kiểm tra hướng pháp tuyến «vào trong» bằng một điểm thử
+  { const e = E[0], m = [(e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2], nn = [-e.u[1] * s, e.u[0] * s], t = Math.min(d, dist(e.a, e.b)) * 0.01 + 1e-6;
+    if (!pointInPolygon([m[0] + nn[0] * t, m[1] + nn[1] * t], P)) for (const q of E) { const k = [q.u[1] * s, -q.u[0] * s]; q.o = [q.a[0] + k[0] * d, q.a[1] + k[1] * d]; } }
+  const X = (A, B) => { const den = A.u[0] * B.u[1] - A.u[1] * B.u[0]; if (Math.abs(den) < 1e-9) return [(A.o[0] + A.u[0] * dist(A.a, A.b) + B.o[0]) / 2, (A.o[1] + A.u[1] * dist(A.a, A.b) + B.o[1]) / 2]; const t = ((B.o[0] - A.o[0]) * B.u[1] - (B.o[1] - A.o[1]) * B.u[0]) / den; return [A.o[0] + A.u[0] * t, A.o[1] + A.u[1] * t]; };
+  let L = E.slice();
+  for (let guard = 0; guard < n * 2 && L.length >= 3; guard++) {
+    const V = L.map((e, i) => X(L[(i - 1 + L.length) % L.length], e));
+    let worst = -1, wv = 0;
+    L.forEach((e, i) => { const a = V[i], b = V[(i + 1) % L.length]; const dd = (b[0] - a[0]) * e.u[0] + (b[1] - a[1]) * e.u[1]; if (dd < wv - 1e-9) { wv = dd; worst = i; } });
+    if (worst < 0) return V;
+    L.splice(worst, 1);
+  }
+  return [];
+}
