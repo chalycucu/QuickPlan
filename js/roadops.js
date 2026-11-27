@@ -153,3 +153,60 @@ export function cutRoadPts(P, a, b, w) {
   pieces.forEach((pc, i) => { const r = G.distToPolyline(w, pc, false).d; if (r < bd) { bd = r; bi = i; } });
   return pieces.filter((pc, i) => i !== bi && pc.length >= 2 && G.length(pc) > 0.5);
 }
+
+// ---------- QP-24: dải phân cách giữa ----------
+// Các đoạn dải phân cách (polyline tim + nửa bề rộng) của tuyến r: ngắt tại giao lộ, đầu dải bo tròn
+// và dừng trước lộ giới (mép vỉa hè) của đường giao cắt.
+export function medianPieces(doc, r) {
+  const med = +(r.props && r.props.median) || 0, P = r.pts;
+  if (med <= 0 || r.props.ped || !P || P.length < 2) return [];
+  const half = Math.min(med, r.props.width) / 2;
+  const cum = [0]; for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + G.dist(P[i - 1], P[i]));
+  const L = cum[cum.length - 1]; if (L < 1e-6) return [];
+  const dirAt = (Q, k) => { const a = Q[k], b = Q[k + 1]; const l = G.dist(a, b) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
+  const cuts = [];
+  const addCut = (s, dp, dq, other) => {
+    const sin = Math.abs(dp[0] * dq[1] - dp[1] * dq[0]);
+    const c = roadTotalWidth(other) / 2 / Math.max(0.35, sin) + half + 0.3;
+    cuts.push([s - c, s + c]);
+  };
+  const bb = G.bbox(P);
+  for (const q of doc.items) {
+    if (q === r || q.kind !== 'road' || q.props.ped || !q.pts || q.pts.length < 2) continue;
+    const Q = q.pts, B = G.bbox(Q), m = roadTotalWidth(q);
+    if (B.x1 < bb.x0 - m || bb.x1 < B.x0 - m || B.y1 < bb.y0 - m || bb.y1 < B.y0 - m) continue;
+    for (let a = 0; a < P.length - 1; a++) for (let b = 0; b < Q.length - 1; b++) {
+      const x = segInt(P[a], P[a + 1], Q[b], Q[b + 1]); if (!x) continue;
+      addCut(cum[a] + G.dist(P[a], x), dirAt(P, a), dirAt(Q, b), q);
+    }
+    // đầu đường q chạm tim r (ngã ba) và đầu đường r chạm tim q
+    for (const [e, k] of [[Q[0], 0], [Q[Q.length - 1], Q.length - 2]]) {
+      const t = G.distToPolyline(e, P, false); if (t.d >= 0.6) continue;
+      addCut(cum[t.i] + G.dist(P[t.i], t.q), dirAt(P, t.i), dirAt(Q, k), q);
+    }
+    for (const [e, s, k] of [[P[0], 0, 0], [P[P.length - 1], L, P.length - 2]]) {
+      const t = G.distToPolyline(e, Q, false); if (t.d >= 0.6) continue;
+      addCut(s, dirAt(P, k), dirAt(Q, t.i), q);
+    }
+  }
+  // khoảng còn lại; đầu tự do của tuyến: lùi nửa bề rộng để đầu bo nằm trong lòng đường
+  cuts.sort((x, y) => x[0] - y[0]);
+  const keep = []; let s0 = half;
+  for (const [a, b] of cuts) { if (a > s0) keep.push([s0, a]); s0 = Math.max(s0, b); }
+  if (L - half > s0) keep.push([s0, L - half]);
+  const at = (s) => { let i = 1; while (i < cum.length - 1 && cum[i] < s) i++; const t = (s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1); return [i, [P[i - 1][0] + (P[i][0] - P[i - 1][0]) * t, P[i - 1][1] + (P[i][1] - P[i - 1][1]) * t]]; };
+  const out = [];
+  for (const [a, b] of keep) {
+    if (b - a < 0.05) continue;
+    const [ia, pa] = at(a), [ib, pb] = at(b);
+    const pts = [pa]; for (let i = ia; i < ib; i++) pts.push([P[i][0], P[i][1]]); pts.push(pb);
+    out.push({ pts, half });
+  }
+  return out;
+}
+// đa giác dải có hai đầu bo tròn
+export function capsulePolygon(pts, half, seg = 10) {
+  const { L, R } = G.offsetSides(pts, half), n = pts.length;
+  const arc = (c, from, to) => { const a0 = Math.atan2(from[1] - c[1], from[0] - c[0]); const o = []; for (let k = 1; k < seg; k++) { const a = a0 - (Math.PI * k) / seg; o.push([c[0] + Math.cos(a) * half, c[1] + Math.sin(a) * half]); } void to; return o; };
+  return [...L, ...arc(pts[n - 1], L[n - 1], R[n - 1]), ...R.slice().reverse(), ...arc(pts[0], R[0], L[0])];
+}

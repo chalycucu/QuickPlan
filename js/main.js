@@ -40,7 +40,7 @@ const S = {
   doc: null, view: new View(), tool: 'road', selectedId: null, multi: [], metrics: null,
   undo: [], redo: [], mode: '2d', images: {}, stroke: null, prevAlerts: {},
   opts: {
-    road: { width: 10.5, sidewalk: 5, minR: 15 },
+    road: { width: 10.5, sidewalk: 5, minR: 15, median: 0 },
     footpath: { width: 3, minR: 3 },
     building: { floors: 5, ortho: true, osnap: true },
     cover: { mat: 'p:gach', color: '#d9cdb4', scale: 0, ang: 0, by: 'mat' },
@@ -1419,6 +1419,7 @@ function renderToolOpts() {
       }
       box.append(lbl('Lòng đường (m)', numInput(o.road.width, (v) => { o.road.width = v; saveOpts(); })));
       box.append(lbl('Vỉa hè mỗi bên (m)', numInput(o.road.sidewalk, (v) => { o.road.sidewalk = v; saveOpts(); })));
+      box.append(lbl('Dải phân cách giữa (m)', numInput(o.road.median || 0, (v) => { o.road.median = Math.max(0, v); saveOpts(); })));
       box.append(lbl('Bán kính cong tối thiểu (m)', numInput(o.road.minR, (v) => { o.road.minR = Math.max(5, v); saveOpts(); })));
       { // tạo đường theo nét line / polyline; cắt đường
         const fl = h(`<button class="chip ${o.road.fromLine ? 'on' : ''}" data-act="fromLine">⤳ Tạo đường theo line / polyline</button>`);
@@ -1928,6 +1929,7 @@ function newItem(kind, pts, props, extra = {}) {
   const layer = al && S.doc.layers.some((l) => l.id === al) ? al : M.KIND_LAYER[kind];
   const it = { id: M.uid(), kind, layer, pts, props, ...extra };
   if (kind === 'building' && props && !props.color && S.opts.building.color) props.color = S.opts.building.color; // màu khối mới
+  if (kind === 'road' && props && !props.ped && props.median == null && S.opts.road.median > 0) props.median = Math.min(S.opts.road.median, Math.max(0, (props.width || 0) - 2)); // dải phân cách giữa (nằm trong lòng đường)
   if (S.iso && kind !== 'facet' && props && typeof props === 'object') props.grp = S.iso; // đang «Khóa khối»: đối tượng mới thuộc khối
   return it;
 }
@@ -4243,6 +4245,7 @@ function renderProps() {
       kv([['Chiều dài', G.fmtNum(G.length(it.pts), 0) + ' m'], ['Lộ giới', G.fmtNum(M.roadTotalWidth(it)) + ' m'], ['Diện tích', G.fmtArea(area)]]);
       field('Lòng đường (m)', numInput(it.props.width, (v) => edit(() => (it.props.width = v))));
       field('Vỉa hè mỗi bên (m)', numInput(it.props.sidewalk, (v) => edit(() => (it.props.sidewalk = v))));
+      field('Dải phân cách giữa (m)', numInput(it.props.median || 0, (v) => edit(() => { if (v > 0) it.props.median = Math.min(v, Math.max(0, it.props.width - 2)); else delete it.props.median; })));
       }
       { // loại đường: đổi loại thì mặt cắt theo loại
         const sel = h(`<select style="max-width:230px"><option value="">— Chưa phân loại —</option>${RO.ROAD_CLASSES.map((c) => `<option value="${c.id}" ${it.props.cls === c.id ? 'selected' : ''}>${c.id}. ${c.name}</option>`).join('')}</select>`);

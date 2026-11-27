@@ -9,7 +9,7 @@ import { frameOf, edgeNormal } from './faces.js';
 import { displayHeights, groundSampler, decodeHeights, elevColor } from './terrain.js';
 import { renderScene, View } from './render2d.js';
 import { matImage, findMat } from './materials.js';
-import { junctionCorners } from './roadops.js';
+import { junctionCorners, medianPieces, capsulePolygon } from './roadops.js';
 import { LANDUSE, roadTotalWidth, bldElev, bldHeight, landTrees, landTreeSize, LAND_CLOSED, LAND_COLORS, layerOf, layerOrder, facetNormal } from './model.js';
 
 // Thế giới 2D (x Đông, y Nam) -> three (x Đông, y lên, z Nam)
@@ -435,6 +435,7 @@ export class View3D {
       if (r.props.ped) { flat(G.bandPolygon(r.pts, r.props.width / 2), [], Y(r, 2), '#e8d9b5', op(r)); continue; }
       flat(G.bandPolygon(r.pts, roadTotalWidth(r) / 2), [], Y(r, 1), '#e3ded3', op(r));
       flat(G.bandPolygon(r.pts, r.props.width / 2), [], Y(r, 3), '#5b636d', op(r));
+      if (r.props.median > 0) for (const pc of medianPieces(doc, r)) flat(capsulePolygon(pc.pts, pc.half), [], Y(r, 6), '#7cc46a', op(r)); // dải phân cách giữa
     }
     for (const j of doc.items.filter((i) => i.kind === 'junction' && iv(i))) { // giao lộ: góc vát vỉa hè, bo lòng đường
       for (const c of junctionCorners(doc, j)) {

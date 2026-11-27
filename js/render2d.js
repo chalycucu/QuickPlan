@@ -4,7 +4,7 @@ import { frameOf } from './faces.js';
 import { ICONS, drawIconAt, drawInk, inkSize } from './icons.js';
 import { matImage, findMat } from './materials.js';
 import { drawAxisGrid } from './axis.js';
-import { junctionCorners } from './roadops.js';
+import { junctionCorners, medianPieces, capsulePolygon } from './roadops.js';
 import { labelKeys, labelMap } from './bdata.js';
 import { LANDUSE, roadTotalWidth, itemArea, lotName, layerOf, layerOrder, cadInert, landTrees, landTreeSize, LAND_CLOSED, LAND_COLORS, TREE_TYPES } from './model.js';
 
@@ -311,8 +311,13 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
   for (const r of roads) strokeBand(ctx, v, r.pts, r.props.width, '#59626d');
   for (const c of jcs) if (c.fillet) { pathPts(ctx, v, c.fillet, true); ctx.fillStyle = '#59626d'; ctx.fill(); ctx.strokeStyle = '#59626d'; ctx.lineWidth = 1; ctx.stroke(); }
   ctx.setLineDash([8, 8]);
-  for (const r of roads) strokeBand(ctx, v, r.pts, Math.max(0.15, 1 / v.scale), '#f4f1e8');
+  for (const r of roads) if (!(r.props.median > 0)) strokeBand(ctx, v, r.pts, Math.max(0.15, 1 / v.scale), '#f4f1e8');
   ctx.setLineDash([]);
+  // QP-24: dải phân cách giữa (phủ xanh, ngắt và bo tròn trước lộ giới đường giao)
+  for (const r of roads) if (r.props.median > 0) for (const pc of medianPieces(doc, r)) {
+    pathPts(ctx, v, capsulePolygon(pc.pts, pc.half), true);
+    ctx.fillStyle = '#7cc46a'; ctx.fill(); ctx.strokeStyle = '#3f8f3a'; ctx.lineWidth = 1; ctx.stroke();
+  }
   for (const it of by('land')) if (!LAND_CLOSED[it.props.style] || it.props.style === 'grove') drawLandTrees(ctx, v, it);
   const bdKeys = labelKeys(doc), bdLbl = bdKeys.length && v.scale > 0.6 ? labelMap(doc, bdKeys, alerts) : null, bdFl = bdKeys.includes('floors');
   for (const b of by('building')) {
