@@ -487,11 +487,14 @@ const ICONS = { // bộ biểu tượng nét mảnh, một màu + lớp tô nh�
 // nhóm công cụ: một nút trên thanh công cụ, bấm mở hộp chọn (Phân tích) hoặc chọn kiểu ngay trong thanh tuỳ chọn (Cảnh quan)
 const TOOL_GROUPS = {
   analysis: { name: 'Phân tích', tools: [['arrow', 'Mũi tên'], ['flow', 'Nét đứt'], ['circle', 'Vòng tròn'], ['cloud', 'Vùng mây'], ['tour', 'Tour route'], ['icon', 'Biểu tượng']] },
-  bld: { name: 'Công trình', tools: [['building', 'Vẽ công trình'], ['selbld', 'Chọn khối'], ['selface', 'Sửa mặt'], ['push', 'Kéo mặt'], ['face', 'Mặt trên khối'], ['preset', 'Khối mẫu'], ['autolay', 'Xếp khối']] },
+  bld: { name: 'Công trình', tools: [['building', 'Vẽ công trình'], ['preset', 'Khối mẫu'], ['autolay', 'Xếp khối']] },
+  // QP-26: Sửa khối tách khỏi Công trình, nằm trên thanh Cọ vẽ: sửa mọi khối 3D (công trình, khối nháp Cọ nháp, lớp tự tạo)
+  blk: { name: 'Sửa khối', tools: [['selbld', 'Chọn khối'], ['selface', 'Sửa mặt'], ['push', 'Kéo mặt'], ['face', 'Mặt trên khối']] },
   land: { name: 'Cảnh quan', tools: [['land', 'Cảnh quan'], ['park', 'Cây xanh'], ['water', 'Sông hồ'], ['cover', 'Vật liệu phủ']] },
 };
 ICONS.bld = ICONS.building;
-const groupOf = (t) => (t === 'push' || t === 'facet' ? 'bld' : Object.keys(TOOL_GROUPS).find((g) => TOOL_GROUPS[g].tools.some((x) => x[0] === t)));
+ICONS.blk = '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="currentColor" fill-opacity=".14"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/><path d="M16.5 2.5l3 3" stroke-width="2.2"/>';
+const groupOf = (t) => (t === 'push' || t === 'facet' ? 'blk' : Object.keys(TOOL_GROUPS).find((g) => TOOL_GROUPS[g].tools.some((x) => x[0] === t)));
 const TOOLS = [
   ['select', 'Chọn'], ['eraser', 'Xoá'], null,
   ['road', 'Đường'], ['bld', 'Công trình', 'group'], ['move', 'Di chuyển'], ['land', 'Cảnh quan', 'group'], ['zone', 'SDĐ'], ['check', 'Kiểm tra chỉ tiêu'], null,
@@ -506,7 +509,7 @@ function buildToolbar() {
     const b = h(`<button class="tool" data-tool="${t[0]}"><span class="ti"><svg viewBox="0 0 24 24">${ICONS[t[0]]}</svg></span><span class="tl">${t[1]}</span></button>`);
     if (t[0] === 'view3d') b.onclick = () => toggle3DBar();
     else if (t[0] === 'pen') b.onclick = () => togglePenBar();
-    else if (t[0] === 'analysis' || t[0] === 'bld') b.onclick = () => openToolGroup(b, t[0]);
+    else if (t[0] === 'analysis' || t[0] === 'bld' || t[0] === 'blk') b.onclick = () => openToolGroup(b, t[0]);
     else if (t[0] === 'land') b.onclick = () => pickTool(groupOf(S.tool) === 'land' ? S.tool : (S.opts.landTool || 'land'));
     else b.onclick = () => pickTool(t[0]);
     tb.append(b);
@@ -539,7 +542,7 @@ function setTool(t) {
   const grp = groupOf(sub || t);
   if (grp === 'land') S.opts.landTool = t;
   $$('#toolbar .tool').forEach((b) => { if (b.dataset.tool === 'view3d' || b.dataset.tool === 'pen') return; b.classList.toggle('on', grp ? b.dataset.tool === grp : b.dataset.tool === t); });
-  for (const g of ['analysis', 'bld']) { const ab = document.querySelector(`.tool[data-tool="${g}"]`); if (ab) { const k = sub || t, cur = grp === g ? k : g; ab.querySelector('svg').innerHTML = ICONS[cur]; ab.querySelector('.tl').textContent = grp === g ? TOOL_GROUPS[g].tools.find((x) => x[0] === k)[1] : TOOL_GROUPS[g].name; } }
+  for (const g of ['analysis', 'bld', 'blk']) { const ab = document.querySelector(`.tool[data-tool="${g}"]`); if (ab) { const k = sub || t, cur = grp === g ? k : g; ab.querySelector('svg').innerHTML = ICONS[cur]; ab.querySelector('.tl').textContent = grp === g ? TOOL_GROUPS[g].tools.find((x) => x[0] === k)[1] : TOOL_GROUPS[g].name; } }
   if (t !== 'select' && t !== 'eraser') { S.selectedId = null; S.multi = []; renderProps(); }
   renderToolOpts(); requestRender(); syncPenBar();
   if (S.mode === '3d' && v3) draw3DOverlay(); // xoá viền mặt khối đang chọn khi đổi công cụ
@@ -575,12 +578,11 @@ function closeToolGroup() { const o = document.querySelector('.toolgrp'); if (o)
 function openToolGroup(btn, g) {
   const old = closeToolGroup(); if (old && old.dataset.g === g) return;
   const r = btn.getBoundingClientRect();
-  const box = h(`<div class="toolgrp" data-g="${g}" style="left:${r.right + 8}px;top:${Math.max(8, Math.min(r.top - 8, innerHeight - (g === 'bld' ? 640 : 330)))}px"><div class="tg-h">${TOOL_GROUPS[g].name}</div></div>`);
+  const box = h(`<div class="toolgrp" data-g="${g}" style="left:${r.right + 8}px;top:${Math.max(8, Math.min(r.top - 8, innerHeight - (g === 'blk' ? 420 : 330)))}px"><div class="tg-h">${TOOL_GROUPS[g].name}</div></div>`);
   for (const [k, n] of TOOL_GROUPS[g].tools) {
     const b = h(`<button class="tool ${(S.subTool || S.tool) === k ? 'on' : ''}" data-pick="${k}"><span class="ti"><svg viewBox="0 0 24 24">${ICONS[k]}</svg></span><span class="tl">${n}</span></button>`);
     b.onclick = () => { closeToolGroup(); pickTool(k); };
-    if (g === 'bld' && k === 'selbld') box.append(h('<div class="tg-h tg-sub">Sửa khối</div>'));
-    if (g === 'bld' && k === 'preset') { box.append(lockRows(() => { closeToolGroup(); })); box.append(h('<div class="tg-h tg-sub">Khối</div>')); }
+    if (g === 'blk' && k === 'selbld') box.append(lockRows(() => { closeToolGroup(); }));
     box.append(b);
   }
   document.body.append(box);
@@ -767,7 +769,7 @@ const EDIT_TOOL = { road: 'road', building: 'building', preset: 'building', auto
 const EDIT_KIND = { road: 'road', junction: 'road', building: 'building', facet: 'building', zone: 'zone', land: 'land', park: 'land', water: 'land', cover: 'land' };
 const EDIT_NAME = { road: 'Đường', building: 'Công trình', zone: 'SDĐ', land: 'Cảnh quan' };
 const editOn = (k) => !k || !!(S.opts.edit && S.opts.edit[k]);
-const canEdit = (it) => editOn(EDIT_KIND[it.kind]);
+const canEdit = (it) => M.isDraft(it) || editOn(EDIT_KIND[it.kind]); // khối nháp thuộc Cọ nháp: luôn sửa được
 const penLayerTool = () => DRAW_TOOLS.has(S.tool) && editOn(EDIT_TOOL[S.tool]); // nét Cọ vẽ thành đối tượng của lớp công cụ
 function noEditToast(it) { const k = EDIT_KIND[it.kind]; toast(`Lớp ${EDIT_NAME[k]} chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp ${EDIT_NAME[k]} để Cọ vẽ sửa đối tượng này`); }
 // QP-21: mỗi lúc chỉ một lớp ở chế độ Chỉnh sửa; hộp của lớp khác bị làm mờ cho tới khi thoát
@@ -797,6 +799,7 @@ const penOp = () => (penOn() ? S.opts.pen.op || null : null);
 const CURVED_PEN = new Set(['free', 'organic', 'smooth', 'arc', 'curve', 'circle', 'ellipse']);
 function penHint(auto) { const k = penShape(); return k ? `Cọ vẽ: ${PEN.penName(k).toLowerCase()}${PEN.isClosedShape(k) ? ' · khoanh / kéo theo đường chéo (hình tròn, ngũ giác: kéo từ tâm)' : ''}` : auto; }
 function penTarget() {
+  if (penOp() === 'extrude' || penOp() === 'mkface') return penDraft() ? 'Cọ nháp (khối nháp)' : 'Công trình';
   if (penOp()) return '';
   const t = penLayerTool() ? S.tool : 'sketch';
   const n = { road: 'Đường', footpath: 'Đường đi bộ', building: 'Công trình', zone: 'Ô đất SDĐ', park: 'Cây xanh', water: 'Sông hồ', land: 'Cảnh quan', cover: 'Vật liệu phủ', cloud: 'Vùng mây', arrow: 'Mũi tên', flow: 'Nét đứt', tour: 'Tour', face: 'Khối trên mái', sketch: 'Cọ nháp' }[t];
@@ -841,17 +844,27 @@ function syncPenBar() {
   const fd = h(`<button class="chip ${S.opts.fingerDraw ? 'on' : ''}" title="Khi không có Apple Pencil">✋ Ngón tay</button>`);
   fd.onclick = () => { S.opts.fingerDraw = !S.opts.fingerDraw; saveOpts(); syncPenBar(); toast(S.opts.fingerDraw ? 'Ngón tay dùng để vẽ · dùng 2 ngón để di chuyển' : 'Ngón tay dùng để di chuyển · vẽ bằng bút'); };
   bar.append(fd);
-  { // QP-25: chọn mặt, khóa khối / mặt, nhìn thẳng mặt ngay trên Cọ vẽ
-    const g3 = h('<div class="pgrp pg-face"></div>'), tb = lockTarget();
-    const sf = h(`<button class="chip ${S.mode === '3d' && S.tool === 'facet' && !p.op ? 'on' : ''}" title="Chạm mái hoặc mặt đứng của khối để chọn mặt">▣ Chọn mặt</button>`);
-    sf.onclick = () => { const go = () => { leaveCmdTool(); p.op = null; saveOpts(); pickTool('selface'); syncPenBar(); toast('Chọn mặt: chạm mái hoặc mặt đứng của khối · rồi vẽ trên mặt bằng Cọ vẽ'); }; if (S.mode !== '3d') setMode('3d').then(go); else go(); };
+  { // QP-26: nhóm Sửa khối trên thanh Cọ vẽ (tách khỏi Công trình): chọn khối, sửa mặt, kéo mặt, mặt trên khối, khóa, nhìn thẳng mặt
+    const g3 = h('<div class="pgrp pg-face"><span class="pg-lbl">Sửa khối</span></div>'), tb = lockTarget();
+    const cur = S.subTool || S.tool;
+    for (const [k, n, ic, need3d, tip] of [
+      ['selbld', 'Chọn khối', '<path d="M5 3l12 7-5 1.5L9.5 17z" fill="currentColor" fill-opacity=".18"/><path d="M5 3l12 7-5 1.5L9.5 17z"/>', false, 'Chạm khối để chọn cả khối (mọi lớp)'],
+      ['selface', 'Sửa mặt', '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5V16.5L12 21z" fill="currentColor" fill-opacity=".3"/>', true, 'Chạm mái hoặc mặt đứng để chọn mặt, rồi vẽ lên mặt bằng Cọ vẽ'],
+      ['push', 'Kéo mặt', '<path d="M4 16l8 4 8-4-8-4z" fill="currentColor" fill-opacity=".14"/><path d="M12 12V3M9 6l3-3 3 3"/>', true, 'Nhấn mặt khối / mảng / mặt phẳng rồi kéo lên xuống'],
+      ['face', 'Mặt trên khối', '<path d="M3 17l9 4 9-4-9-4z"/><path d="M8 13V8l4-2 4 2v5l-4 2z" fill="currentColor" fill-opacity=".2"/>', false, 'Vẽ khối chồng trên mái khối có sẵn'],
+    ]) {
+      const on = !p.op && (k === 'selface' ? cur === 'selface' || S.tool === 'facet' : cur === k);
+      const bt = h(`<button class="chip pg-t ${on ? 'on' : ''}" data-blk="${k}" title="${tip}"><svg viewBox="0 0 24 24">${ic}</svg>${n}</button>`);
+      bt.onclick = () => { const go = () => { leaveCmdTool(); pickTool(k); syncPenBar(); toast(tip); }; if (need3d && S.mode !== '3d') setMode('3d').then(go); else go(); };
+      g3.append(bt);
+    }
     const kb = h(`<label class="chk ${tb ? '' : 'dis'}" title="${tb ? 'Chỉ thao tác trên khối này' : 'Chọn một khối trước'}"><input type="checkbox" ${S.iso ? 'checked' : ''} ${tb || S.iso ? '' : 'disabled'}> 🔒 Khóa khối</label>`);
     kb.querySelector('input').onchange = (e) => { setIso(e.target.checked && tb ? tb.id : null); syncPenBar(); };
     const mb = h(`<label class="chk ${S.facetSel ? '' : 'dis'}" title="${S.facetSel ? 'Chỉ thao tác trên mặt đang chọn' : 'Chọn một mặt trước'}"><input type="checkbox" ${S.isoFace && S.facetSel ? 'checked' : ''} ${S.facetSel ? '' : 'disabled'}> ▣ Khóa mặt</label>`);
     mb.querySelector('input').onchange = (e) => { setIsoFace(e.target.checked); syncPenBar(); };
     const lb = lookBtn(), lo = lb.onclick;
-    lb.onclick = () => { if (!S.facetSel && !S.lookLock) { toast('Chọn một mặt trước (▣ Chọn mặt)'); return; } lo(); syncPenBar(); };
-    g3.append(sf, kb, mb, lb);
+    lb.onclick = () => { if (!S.facetSel && !S.lookLock) { toast('Chọn một mặt trước (Sửa mặt)'); return; } lo(); syncPenBar(); };
+    g3.append(kb, mb, lb);
     bar.append(h('<span class="psep"></span>'), g3);
   }
   const tg = penTarget(); if (tg) bar.append(h(`<span class="ptarget" title="Nét vẽ thành đối tượng của lớp này">→ ${tg}</span>`));
@@ -1165,29 +1178,44 @@ function extrudeTarget(hit, H) {
     return hit;
   }
   const b = newItem('building', ringOfPen(hit), {});
+  if (M.isDraft(hit) || (hit.kind !== 'plane' && penDraft())) b.layer = 5; // khối nháp: nằm trong lớp Cọ nháp
   if (hit.kind === 'plane') { if (hit.props.on) b.props.on = hit.props.on; if (hit.props.dz) b.props.dz = hit.props.dz; S.doc.items = S.doc.items.filter((i) => i !== hit); }
+  else if (b.layer === 5 && hit.kind === 'sketch') S.doc.items = S.doc.items.filter((i) => i !== hit); // Cọ nháp: nét khép kín thành đáy khối (tránh gộp lớp ra thêm một công trình)
   S.doc.items.push(b);
   return extrudeTarget(b, H);
 }
+// QP-26: Extrude / Tạo mặt khi lớp Công trình chưa bật Chỉnh sửa: khối nháp trong lớp Cọ nháp (gộp lớp vào Công trình mới thành công trình)
+const penDraft = () => !editOn('building');
+// đối tượng để Extrude tại điểm chạm: trúng trực tiếp, không thì hình khép kín nhỏ nhất bao điểm chạm (nét vẽ kín chỉ trúng ở nét)
+function pickExtrude(w, sc) {
+  const hit = pickFor(w, sc, (i) => !!ringOfPen(i) && draftOk(i), false);
+  if (hit && hit.kind !== 'zone') return hit;
+  let best = null, ba = Infinity;
+  for (const it of M.liveItems(S.doc)) {
+    if (!['sketch', 'cad', 'plane', 'cover', 'cloud', 'park', 'land', 'water'].includes(it.kind) || !inIso(it) || !it.pts || M.isLocked(S.doc, it)) continue;
+    const r = ringOfPen(it); if (!r || r.length < 3 || !G.pointInPolygon(w, r)) continue;
+    const a = Math.abs(G.area(r)); if (a < ba) { ba = a; best = it; }
+  }
+  return best || hit;
+}
+const draftOk = (i) => !penDraft() || M.isDraft(i) || i.kind !== 'building'; // ở Cọ nháp không đổi công trình thật
 function penExtrude(w, sc) {
   const H = S.opts.pen.H || 10;
-  if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Extrude'); return; }
-  const hit = pickFor(w, sc, (i) => !!ringOfPen(i), false);
+  const hit = pickExtrude(w, sc);
   if (!hit) { toast('Chạm vào một mặt (Tạo mặt), hình khép kín (nét vẽ khép kín, ô đất, vật liệu phủ…) hoặc một công trình'); return; }
   if (M.isLocked(S.doc, hit)) { lockedToast(); return; }
   checkpoint();
   if (hit.kind === 'building' && !hit.props.solid && H > 0) { const floors = Math.max(1, Math.round(H / 3.3)); hit.props.floors = floors; hit.props.floorH = +(H / floors).toFixed(3); changed(); toast(`Công trình cao ${G.fmtNum(H)} m (${floors} tầng)`); return; }
   const b = extrudeTarget(hit, H);
   S.selectedId = b.id; changed(); renderProps();
-  toast(`Đã extrude ${H < 0 ? 'xuống ' : ''}${G.fmtNum(Math.abs(H))} m · bật 3D để xem`);
+  toast(`Đã extrude ${H < 0 ? 'xuống ' : ''}${G.fmtNum(Math.abs(H))} m${M.isDraft(b) ? ' · khối nháp (lớp Cọ nháp), gộp lớp Cọ nháp vào Công trình để thành công trình' : ''} · bật 3D để xem`);
 }
 // kéo bút để đùn (2D): bắt đầu khi bút đi quá vài điểm ảnh; lên = đùn ra, xuống = đùn ngược
 function penExtDrag(e) {
   const d = drag; if (d.dead) return;
   if (!d.moved) {
     if (Math.abs(d.y - e.clientY) < 8) return;
-    if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Extrude'); d.dead = true; return; }
-    const hit = pickFor(d.startW, d.sc, (i) => !!ringOfPen(i), false);
+    const hit = pickExtrude(d.startW, d.sc);
     if (!hit) { toast('Nhấn vào một mặt hoặc hình khép kín rồi kéo bút lên / xuống'); d.dead = true; return; }
     if (M.isLocked(S.doc, hit)) { lockedToast(); d.dead = true; return; }
     d.snap = snapItems(); d.y = e.clientY; d.moved = true;
@@ -1218,14 +1246,13 @@ function solidDrag3D(it, e) {
 }
 // ---- Tạo mặt (QP-25): đa giác kín / vùng kín do nét rời tạo thành / mái khối -> mặt phẳng chờ Extrude ----
 function penMakeFace(w, sc) {
-  if (!editOn('building')) { toast('Lớp Công trình chưa bật «Chỉnh sửa»: tích ô ✏ Chỉnh sửa trong hộp Công trình để Tạo mặt'); return; }
   const old = S.doc.items.find((i) => i.kind === 'plane' && G.pointInPolygon(w, i.pts));
   if (old) { S.selectedId = old.id; renderProps(); requestRender(); toast('Đã có mặt ở đây · chọn Extrude rồi chạm / kéo mặt để đùn'); return; }
-  let ring = null, best = Infinity;
+  let ring = null, best = Infinity, src = null;
   for (const it of M.liveItems(S.doc)) {
     if (['zone', 'road', 'junction', 'facet', 'plane', 'building'].includes(it.kind) || !inIso(it) || !it.pts) continue;
     const r = ringOfPen(it); if (!r || r.length < 3 || !G.pointInPolygon(w, r)) continue;
-    const a = Math.abs(G.area(r)); if (a < best) { best = a; ring = r; }
+    const a = Math.abs(G.area(r)); if (a < best) { best = a; ring = r; src = it; }
   }
   const host = topBuildingAt(w);
   if (!ring) { // vùng kín do các nét rời (nét vẽ, nét CAD, mũi tên…) tạo thành
@@ -1243,8 +1270,10 @@ function penMakeFace(w, sc) {
   const props = {};
   if (host && G.pointInPolygon(G.centroid(ring), host.pts)) props.on = host.id;
   const it = newItem('plane', ring, props);
-  checkpoint(); S.doc.items.push(it); S.selectedId = it.id; changed(); renderProps();
-  toast(`Đã tạo mặt ${G.fmtArea(Math.abs(G.area(ring)))}${props.on ? ' trên mái khối' : ''} · chọn Extrude rồi chạm mặt (theo chiều cao đã nhập) hoặc nhấn mặt và kéo bút để đùn`);
+  if (penDraft() || (host && M.isDraft(host))) it.layer = 5;
+  checkpoint(); if (it.layer === 5 && src && src.kind === 'sketch') S.doc.items = S.doc.items.filter((i) => i !== src); // Cọ nháp: nét khép kín thành mặt
+  S.doc.items.push(it); S.selectedId = it.id; changed(); renderProps();
+  toast(`Đã tạo mặt ${G.fmtArea(Math.abs(G.area(ring)))}${props.on ? ' trên mái khối' : ''}${it.layer === 5 ? ' (lớp Cọ nháp)' : ''} · chọn Extrude rồi chạm mặt (theo chiều cao đã nhập) hoặc nhấn mặt và kéo bút để đùn`);
 }
 // 3D: lệnh Extrude dùng công cụ Kéo mặt; bỏ lệnh thì về Sửa mặt
 function syncPen3DTool() {
@@ -2693,6 +2722,7 @@ function topBuildingAt(w) {
 function stackOn(parent, pts) {
   const byId = new Map(S.doc.items.map((i) => [i.id, i]));
   const it = newItem('building', pts, { floors: S.opts.building.floors, floorH: parent.props.floorH || 3.3, on: parent.id });
+  if (M.isDraft(parent)) { it.layer = 5; M.setSolidHeight(it, S.opts.building.floors * 3.3); } // trên khối nháp: cũng là khối nháp
   if (parent.props.color) it.props.color = parent.props.color;
   checkpoint(); S.doc.items.push(it); S.selectedId = it.id; changed(); renderProps();
   toast(`Khối ${it.props.floors} tầng đặt trên mái ở cao độ ${G.fmtNum(M.bldElev(parent, byId) + M.bldHeight(parent))} m`);
@@ -5471,11 +5501,11 @@ const lineOfItem = (it) => (it.pts && it.pts.length >= 2 && it.kind !== 'circle'
 // trả về: 'keep' (giữ nguyên dạng), một đối tượng mới (đã chuyển dạng), hoặc null (bị xoá)
 function convertFor(it, T) {
   const ring = ringOfItem(it), line = lineOfItem(it), o = S.opts;
-  const KEEP = { 2: ['road', 'junction'], 6: ['building', 'facet'], 9: ['building', 'facet'], 3: ['zone'], 7: ['park', 'land', 'cover', 'water'], 4: ['arrow', 'flow', 'circle', 'cloud', 'icon'] }[T];
+  const KEEP = { 2: ['road', 'junction'], 6: ['building', 'facet', 'plane'], 9: ['building', 'facet', 'plane'], 3: ['zone'], 7: ['park', 'land', 'cover', 'water'], 4: ['arrow', 'flow', 'circle', 'cloud', 'icon'] }[T];
   if (T >= 100) return 'keep';
   if (KEEP && KEEP.includes(it.kind)) return 'keep';
   if (T === 0) { if (it.kind === 'cad') return 'keep'; const P = ring || line; return P ? { id: M.uid(), kind: 'cad', layer: 0, pts: P, closed: !!ring, props: {} } : null; }
-  if (T === 5) { if (it.kind === 'sketch') return 'keep'; const P = ring ? ring.concat([ring[0]]) : line; return P ? newItem('sketch', P.map((q) => [q[0], q[1], 0.5]), { color: o.sketch.color, width: 2 / S.view.scale }) : null; }
+  if (T === 5) { if (it.kind === 'sketch' || M.isSolidKind(it.kind)) return 'keep'; const P = ring ? ring.concat([ring[0]]) : line; return P ? newItem('sketch', P.map((q) => [q[0], q[1], 0.5]), { color: o.sketch.color, width: 2 / S.view.scale }) : null; }
   if (T === 6 || T === 9) return ring ? newItem('building', ring, { floors: o.building.floors, floorH: 3.3 }) : null;
   if (T === 3) return ring ? newZone(ring) : null;
   if (T === 7) return ring ? newItem('park', ring, { name: '' }) : line ? newItem('land', line, landProps('row')) : null;
@@ -5524,7 +5554,7 @@ function mergeLayersDialog() {
 }
 function mergeLayers(L, T, P = mergePlan(L, T)) {
   const doc = S.doc; checkpoint();
-  const layerFor = (it) => (T >= 100 ? T : T === 9 && (it.kind === 'building' || it.kind === 'facet') ? 9 : M.KIND_LAYER[it.kind] ?? 4);
+  const layerFor = (it) => (T >= 100 ? T : T === 9 && (it.kind === 'building' || it.kind === 'facet') ? 9 : T === 5 && M.isSolidKind(it.kind) ? 5 : M.KIND_LAYER[it.kind] ?? 4);
   for (const it of P.keep) it.layer = layerFor(it);
   const rm = new Set(P.del.map((i) => i.id));
   for (const [old, nw] of P.conv) { rm.add(old.id); nw.layer = layerFor(nw); doc.items.push(nw); }

@@ -470,7 +470,7 @@ export class View3D {
         const floors = b.props.floors || 1, fh = b.props.floorH || 3.3;
         const H = floors * fh, y0 = bldElev(b, byId);
         const z = zoneOf(b);
-        let color = b.props.color || (doc.settings.bldColorByUse && z ? lighten((LANDUSE[z.props.code] || LANDUSE.ODT).color, 0.45) : '#f7f7f5');
+        let color = b.props.color || (b.layer === 5 ? '#cbd5e1' : doc.settings.bldColorByUse && z ? lighten((LANDUSE[z.props.code] || LANDUSE.ODT).color, 0.45) : '#f7f7f5'); // khối nháp: xám xanh
         const vio = this.checkMode && !real && metrics && metrics.viol ? metrics.viol[b.id] : null;
         if (this.checkMode && !real) { if (vio) { color = '#ef4444'; violLab.push({ b, y: y0 + H, lines: vio }); } }
         else if (alerts[b.id] === 'over' && !b.props.color && !real) color = '#f08a8a';

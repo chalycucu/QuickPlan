@@ -628,3 +628,8 @@ body.pen-on .props { top: calc(72px + var(--penh, 48px) + var(--safe-t)); }
 #pop.lay-h > .jx-dlg { columns: auto; }
 .jx-q.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
 .jx-foot { padding-right: 34px; }
+/* QP-26: nhóm Sửa khối trên thanh Cọ vẽ */
+.penbar .pg-face { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.penbar .pg-face .pg-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-right: 2px; }
+.penbar .pg-face .pg-t { display: inline-flex; align-items: center; gap: 5px; }
+.penbar .pg-face .pg-t svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

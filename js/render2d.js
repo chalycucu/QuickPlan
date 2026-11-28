@@ -332,6 +332,11 @@ function drawItems(ctx, doc, v, list, { alerts, dark, opacity, viol }) {
   for (const b of by('building')) {
     polyWithHoles(ctx, v, b);
     const al = viol ? (viol[b.id] ? 'over' : null) : alerts[b.id];
+    if (b.layer === 5) { // QP-26: khối nháp (Cọ nháp): nền xám xanh, viền đứt
+      ctx.fillStyle = b.props.color || '#e2e8f0'; ctx.fill('evenodd'); ctx.strokeStyle = '#475569'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
+      if (v.scale > 0.6) { const c = v.toScreen(G.centroid(b.pts)); ctx.fillStyle = '#334155'; ctx.font = `600 ${Math.min(13, 6 + v.scale * 2)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('Nháp · ' + G.fmtNum((b.props.floors || 1) * (b.props.floorH || 3.3), 1) + ' m', c[0], c[1]); }
+      continue;
+    }
     ctx.fillStyle = viol ? (al ? '#ef4444' : (b.props.color || '#ffffff')) : al ? (al === 'over' ? '#f3a6a6' : '#fbd38d') : (b.props.color || '#ffffff'); ctx.fill('evenodd');
     ctx.strokeStyle = viol && al ? '#991b1b' : al ? ALERT_COL[al] : '#1d2a3a'; ctx.lineWidth = al ? 2.5 : 1.5;
     if (b.props.on) { ctx.setLineDash([6, 4]); ctx.lineWidth = 2; } // khối chồng trên mái khối khác

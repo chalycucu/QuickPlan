@@ -3,7 +3,7 @@ import * as G from './geom.js';
 import { LU_PLANS, LU_TABLES } from './landuse-tables.js';
 import { junctionCorners } from './roadops.js';
 
-export const APP_VERSION = '0.33.0';
+export const APP_VERSION = '0.33.1';
 export const DESIGNER = 'Phan Trọng Tuệ';
 
 // Danh mục chức năng sử dụng đất: theo loại hình quy hoạch (QHC 1/10.000, QHC 1/5.000, QHPK 1/2.000, QHCT)
@@ -100,7 +100,10 @@ export const KIND_LAYER = { water: 7, road: 2, zone: 3, park: 7, land: 7, cover:
 export const cadInert = (doc, it) => it.kind === 'cad' && !!((doc.layers || []).find((l) => l.id === layerOf(it)) || {}).cadView;
 export const liveItems = (doc) => doc.items.filter((it) => !cadInert(doc, it));
 // lớp người dùng tạo có số hiệu từ 100; đối tượng được gán vào đó giữ it.layer
-export const layerOf = (it) => (it.layer >= 100 || (it.layer === 9 && (it.kind === 'building' || it.kind === 'facet')) ? it.layer : KIND_LAYER[it.kind] ?? 4);
+// QP-26: khối 3D nháp (Cọ nháp) nằm trong lớp Cọ nháp (5) tới khi gộp vào lớp Công trình
+export const isSolidKind = (k) => k === 'building' || k === 'facet' || k === 'plane';
+export const isDraft = (it) => it.layer === 5 && isSolidKind(it.kind);
+export const layerOf = (it) => (it.layer >= 100 || (it.layer === 9 && (it.kind === 'building' || it.kind === 'facet')) || (it.layer === 5 && isSolidKind(it.kind)) ? it.layer : KIND_LAYER[it.kind] ?? 4);
 export function isLocked(doc, it) { const l = doc.layers.find((x) => x.id === layerOf(it)); return !!(l && l.locked); }
 export function layerOrder(doc) {
   const ids = new Set(doc.layers.map((l) => l.id));
@@ -320,7 +323,7 @@ export function junctionCutArea(doc, j) { return junctionCorners(doc, j).reduce(
 // ---------- Bảng chỉ tiêu (HUD) ----------
 export function computeMetrics(doc) {
   const zones = doc.items.filter((i) => i.kind === 'zone');
-  const buildings = doc.items.filter((i) => i.kind === 'building');
+  const buildings = doc.items.filter((i) => i.kind === 'building' && !isDraft(i)); // khối nháp (Cọ nháp) không tính chỉ tiêu
   // lưới không gian để tìm ô đất chứa một điểm nhanh (bản vẽ lớn hàng nghìn công trình)
   const CELL = 200, grid = new Map(), zb = new Map();
   for (const z of zones) {
